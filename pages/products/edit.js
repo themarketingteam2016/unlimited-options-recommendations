@@ -2,22 +2,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import Sidebar from '../../../components/Sidebar';
-import styles from '../../../styles/ProductEdit.module.css';
+import Sidebar from '../../components/Sidebar';
+import styles from '../../styles/ProductEdit.module.css';
 
 export default function ProductEdit() {
   const router = useRouter();
-  const { id: idParam } = router.query;
-
-  // Handle catch-all route - id will be an array
-  const id = idParam && Array.isArray(idParam) ? idParam.join('/') : idParam;
-
-  // For API calls, use base64 encoding to avoid URL issues
-  const encodedIdForApi = id ? btoa(id) : null;
-
-  console.log('Router idParam:', idParam);
-  console.log('Reconstructed id:', id);
-  console.log('Base64 encoded for API:', encodedIdForApi);
+  const { productId } = router.query;
 
   const [product, setProduct] = useState(null);
   const [attributes, setAttributes] = useState([]);
@@ -34,10 +24,10 @@ export default function ProductEdit() {
   const [selectedRecommendations, setSelectedRecommendations] = useState([]);
 
   useEffect(() => {
-    if (id) {
+    if (productId) {
       fetchData();
     }
-  }, [id]);
+  }, [productId]);
 
   const fetchData = async () => {
     try {
@@ -51,11 +41,11 @@ export default function ProductEdit() {
       const productsData = await productsRes.json();
       setAllProducts(Array.isArray(productsData) ? productsData : []);
 
-      const foundProduct = productsData.find(p => p.id === id);
+      const foundProduct = productsData.find(p => p.id === productId);
       setProduct(foundProduct);
 
       // Fetch existing recommendations using query params
-      const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(id)}`);
+      const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
       const recsData = await recsRes.json();
       setSelectedRecommendations(
         Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
@@ -73,7 +63,7 @@ export default function ProductEdit() {
 
   const fetchVariants = async () => {
     try {
-      const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`);
       const data = await res.json();
       setVariants(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -106,7 +96,7 @@ export default function ProductEdit() {
         return;
       }
 
-      const res = await fetch(`/api/variants/generate?productId=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/variants/generate?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +130,7 @@ export default function ProductEdit() {
 
     try {
       if (bulkAction === 'delete') {
-        const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
+        const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variantIds: selectedVariants })
@@ -160,7 +150,7 @@ export default function ProductEdit() {
             ...(bulkAction === 'stock' ? { stock_quantity: parseInt(bulkValue) } : {})
           }));
 
-        const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
+        const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variants: updatedVariants })
@@ -187,7 +177,7 @@ export default function ProductEdit() {
     updatedVariant[field] = value;
 
     try {
-      await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
+      await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variants: [updatedVariant] })
@@ -197,17 +187,17 @@ export default function ProductEdit() {
     }
   };
 
-  const handleRecommendationToggle = (productId) => {
+  const handleRecommendationToggle = (prodId) => {
     setSelectedRecommendations(prev =>
-      prev.includes(productId)
-        ? prev.filter(p => p !== productId)
-        : [...prev, productId].slice(0, 2) // Max 2 recommendations
+      prev.includes(prodId)
+        ? prev.filter(p => p !== prodId)
+        : [...prev, prodId].slice(0, 2) // Max 2 recommendations
     );
   };
 
   const handleSaveRecommendations = async () => {
     try {
-      const res = await fetch(`/api/recommendations?productId=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
@@ -252,8 +242,11 @@ export default function ProductEdit() {
           </div>
         )}
 
+        {/* Attributes Selection */}
         <div className={styles.section}>
           <h2>Select Attributes</h2>
+          <p className={styles.subtitle}>Choose which attributes to use for variant generation</p>
+
           <div className={styles.attributesGrid}>
             {attributes.map(attr => (
               <div key={attr.id} className={styles.attributeCard}>
@@ -263,13 +256,13 @@ export default function ProductEdit() {
                     checked={selectedAttributes[attr.id] || false}
                     onChange={() => handleAttributeToggle(attr.id)}
                   />
-                  <span>{attr.name}</span>
+                  {attr.name}
                   {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                 </label>
 
-                {selectedAttributes[attr.id] && (
+                {selectedAttributes[attr.id] && attr.attribute_values?.length > 0 && (
                   <div className={styles.valuesGrid}>
-                    {attr.attribute_values?.map(val => (
+                    {attr.attribute_values.map(val => (
                       <label key={val.id} className={styles.valueLabel}>
                         <input
                           type="checkbox"
@@ -277,7 +270,7 @@ export default function ProductEdit() {
                           onChange={() => handleValueToggle(attr.id, val.id)}
                         />
                         {val.image_url && <img src={val.image_url} alt={val.value} className={styles.valueImg} />}
-                        <span>{val.value}</span>
+                        {val.value}
                       </label>
                     ))}
                   </div>
@@ -289,50 +282,43 @@ export default function ProductEdit() {
           <button
             className={styles.btnPrimary}
             onClick={() => setShowGenerateModal(true)}
-            disabled={Object.values(selectedAttributes).filter(Boolean).length === 0}
+            disabled={Object.values(selectedAttributes).every(v => !v)}
           >
-            Save & Generate Variants
+            Generate Variants
           </button>
         </div>
 
-        <div className={styles.section}>
-          <h2>Product Recommendations</h2>
-          <p className={styles.subtitle}>Select up to 2 products to recommend on the product page</p>
-          <div className={styles.recommendationsGrid}>
-            {allProducts
-              .filter(p => p.id !== id)
-              .map(p => (
-                <div
-                  key={p.id}
-                  className={`${styles.recommendationCard} ${
-                    selectedRecommendations.includes(p.id) ? styles.selected : ''
-                  }`}
-                  onClick={() => handleRecommendationToggle(p.id)}
-                >
-                  {p.featuredImage && (
-                    <img src={p.featuredImage.url} alt={p.title} className={styles.recImage} />
-                  )}
-                  <h4>{p.title}</h4>
-                  {selectedRecommendations.includes(p.id) && (
-                    <span className={styles.selectedBadge}>✓ Selected</span>
-                  )}
-                </div>
-              ))}
+        {/* Generate Modal */}
+        {showGenerateModal && (
+          <div className={styles.modal} onClick={() => setShowGenerateModal(false)}>
+            <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+              <h3>Generate Variants</h3>
+              <p>Choose how to generate variants:</p>
+              <div className={styles.modalActions}>
+                <button className={styles.btnSecondary} onClick={() => setShowGenerateModal(false)}>
+                  Cancel
+                </button>
+                <button className={styles.btnPrimary} onClick={() => handleGenerateVariants('modify')}>
+                  Add to Existing
+                </button>
+                <button className={styles.btnDanger} onClick={() => handleGenerateVariants('scratch')}>
+                  Replace All (From Scratch)
+                </button>
+              </div>
+            </div>
           </div>
-          <button className={styles.btnPrimary} onClick={handleSaveRecommendations}>
-            Save Recommendations
-          </button>
-        </div>
+        )}
 
+        {/* Variants Table */}
         {variants.length > 0 && (
           <div className={styles.section}>
             <div className={styles.variantsHeader}>
               <h2>Variants ({variants.length})</h2>
               <div className={styles.bulkActions}>
-                <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)}>
+                <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
                   <option value="">Bulk Actions</option>
-                  <option value="price">Update Price</option>
-                  <option value="stock">Update Stock</option>
+                  <option value="price">Set Price</option>
+                  <option value="stock">Set Stock</option>
                   <option value="delete">Delete</option>
                 </select>
                 {(bulkAction === 'price' || bulkAction === 'stock') && (
@@ -340,14 +326,10 @@ export default function ProductEdit() {
                     type="number"
                     placeholder="Value"
                     value={bulkValue}
-                    onChange={(e) => setBulkValue(e.target.value)}
+                    onChange={e => setBulkValue(e.target.value)}
                   />
                 )}
-                <button
-                  className={styles.btnSecondary}
-                  onClick={handleBulkAction}
-                  disabled={!bulkAction || selectedVariants.length === 0}
-                >
+                <button className={styles.btnSecondary} onClick={handleBulkAction}>
                   Apply
                 </button>
               </div>
@@ -360,20 +342,14 @@ export default function ProductEdit() {
                     <input
                       type="checkbox"
                       checked={selectedVariants.length === variants.length}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedVariants(variants.map(v => v.id));
-                        } else {
-                          setSelectedVariants([]);
-                        }
-                      }}
+                      onChange={e => setSelectedVariants(e.target.checked ? variants.map(v => v.id) : [])}
                     />
                   </th>
                   <th>Options</th>
-                  <th>SKU</th>
                   <th>Price</th>
+                  <th>SKU</th>
                   <th>Stock</th>
-                  <th>Status</th>
+                  <th>Active</th>
                 </tr>
               </thead>
               <tbody>
@@ -383,55 +359,50 @@ export default function ProductEdit() {
                       <input
                         type="checkbox"
                         checked={selectedVariants.includes(variant.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedVariants([...selectedVariants, variant.id]);
-                          } else {
-                            setSelectedVariants(selectedVariants.filter(id => id !== variant.id));
-                          }
+                        onChange={e => {
+                          setSelectedVariants(prev =>
+                            e.target.checked ? [...prev, variant.id] : prev.filter(id => id !== variant.id)
+                          );
                         }}
                       />
                     </td>
                     <td>
                       {variant.variant_options?.map(opt => (
                         <div key={opt.id} className={styles.optionTag}>
-                          {opt.attribute_value?.image_url && (
+                          {opt.attribute_value.image_url && (
                             <img src={opt.attribute_value.image_url} alt="" className={styles.optionImg} />
                           )}
-                          {opt.attribute?.name}: {opt.attribute_value?.value}
+                          {opt.attribute.name}: {opt.attribute_value.value}
                         </div>
                       ))}
                     </td>
                     <td>
                       <input
-                        type="text"
-                        value={variant.sku || ''}
-                        onChange={(e) => handleVariantUpdate(variant.id, 'sku', e.target.value)}
-                        onBlur={() => fetchVariants()}
+                        type="number"
+                        step="0.01"
+                        value={variant.price || ''}
+                        onChange={e => handleVariantUpdate(variant.id, 'price', parseFloat(e.target.value))}
                       />
                     </td>
                     <td>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={variant.price || 0}
-                        onChange={(e) => handleVariantUpdate(variant.id, 'price', e.target.value)}
-                        onBlur={() => fetchVariants()}
+                        type="text"
+                        value={variant.sku || ''}
+                        onChange={e => handleVariantUpdate(variant.id, 'sku', e.target.value)}
                       />
                     </td>
                     <td>
                       <input
                         type="number"
                         value={variant.stock_quantity || 0}
-                        onChange={(e) => handleVariantUpdate(variant.id, 'stock_quantity', e.target.value)}
-                        onBlur={() => fetchVariants()}
+                        onChange={e => handleVariantUpdate(variant.id, 'stock_quantity', parseInt(e.target.value))}
                       />
                     </td>
                     <td>
                       <input
                         type="checkbox"
                         checked={variant.is_active}
-                        onChange={(e) => handleVariantUpdate(variant.id, 'is_active', e.target.checked)}
+                        onChange={e => handleVariantUpdate(variant.id, 'is_active', e.target.checked)}
                       />
                     </td>
                   </tr>
@@ -441,34 +412,33 @@ export default function ProductEdit() {
           </div>
         )}
 
-        {showGenerateModal && (
-          <div className={styles.modal}>
-            <div className={styles.modalContent}>
-              <h3>How would you like to proceed?</h3>
-              <p>Choose how to generate variants:</p>
-              <div className={styles.modalActions}>
-                <button
-                  className={styles.btnPrimary}
-                  onClick={() => handleGenerateVariants('scratch')}
-                >
-                  Generate from Scratch
-                </button>
-                <button
-                  className={styles.btnSecondary}
-                  onClick={() => handleGenerateVariants('modify')}
-                >
-                  Modify Current Variants
-                </button>
-                <button
-                  className={styles.btnDanger}
-                  onClick={() => setShowGenerateModal(false)}
-                >
-                  Cancel
-                </button>
+        {/* Recommendations */}
+        <div className={styles.section}>
+          <h2>Product Recommendations</h2>
+          <p className={styles.subtitle}>Select up to 2 products to recommend with this product</p>
+
+          <div className={styles.recommendationsGrid}>
+            {allProducts.filter(p => p.id !== productId).map(prod => (
+              <div
+                key={prod.id}
+                className={`${styles.recommendationCard} ${selectedRecommendations.includes(prod.id) ? styles.selected : ''}`}
+                onClick={() => handleRecommendationToggle(prod.id)}
+              >
+                {prod.featuredImage && (
+                  <img src={prod.featuredImage.url} alt={prod.title} className={styles.recImage} />
+                )}
+                <h4>{prod.title}</h4>
+                {selectedRecommendations.includes(prod.id) && (
+                  <span className={styles.selectedBadge}>Selected</span>
+                )}
               </div>
-            </div>
+            ))}
           </div>
-        )}
+
+          <button className={styles.btnPrimary} onClick={handleSaveRecommendations}>
+            Save Recommendations
+          </button>
+        </div>
       </main>
     </div>
   );
