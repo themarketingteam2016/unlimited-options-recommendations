@@ -303,3 +303,34 @@
   padding: 40px;
   color: #6d7175;
 }
+
+.valuesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.valuesHeader h4 {
+  margin: 0;
+}
+
+.bulkValueForm {
+  margin-bottom: 20px;
+}
+
+.bulkTextarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+
+.bulkTextarea:focus {
+  outline: none;
+  border-color: #008060;
+}

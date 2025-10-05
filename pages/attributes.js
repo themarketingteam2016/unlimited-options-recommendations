@@ -13,6 +13,8 @@ export default function Attributes() {
   const [newValue, setNewValue] = useState({ value: '', imageUrl: '' });
   const [editingValue, setEditingValue] = useState(null);
   const [message, setMessage] = useState(null);
+  const [bulkMode, setBulkMode] = useState({});
+  const [bulkValues, setBulkValues] = useState('');
 
   useEffect(() => {
     fetchAttributes();
@@ -109,6 +111,37 @@ export default function Attributes() {
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to add value' });
+    }
+  };
+
+  const handleBulkAddValues = async (attributeId) => {
+    if (!bulkValues.trim()) return;
+
+    try {
+      // Parse values - support both comma-separated and newline-separated
+      const valuesList = bulkValues
+        .split(/[\n,]/)
+        .map(v => v.trim())
+        .filter(v => v.length > 0);
+
+      if (valuesList.length === 0) return;
+
+      // Add each value
+      for (const value of valuesList) {
+        await fetch(`/api/attributes/${attributeId}/values`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value, imageUrl: '' })
+        });
+      }
+
+      setMessage({ type: 'success', text: `Added ${valuesList.length} values successfully!` });
+      setBulkValues('');
+      setBulkMode({ ...bulkMode, [attributeId]: false });
+      fetchAttributes();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to add bulk values' });
     }
   };
 
@@ -243,22 +276,46 @@ export default function Attributes() {
 
                 {expandedAttribute === attr.id && (
                   <div className={styles.valuesSection}>
-                    <h4>Values</h4>
-                    <div className={styles.addValueForm}>
-                      <input
-                        type="text"
-                        placeholder="Value name"
-                        value={newValue.value}
-                        onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
-                      />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(e, false)}
-                      />
-                      {newValue.imageUrl && <img src={newValue.imageUrl} alt="Preview" className={styles.previewImg} />}
-                      <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
+                    <div className={styles.valuesHeader}>
+                      <h4>Values</h4>
+                      <button
+                        onClick={() => setBulkMode({ ...bulkMode, [attr.id]: !bulkMode[attr.id] })}
+                        className={styles.btnSecondary}
+                      >
+                        {bulkMode[attr.id] ? 'Single Mode' : 'Bulk Add'}
+                      </button>
                     </div>
+
+                    {bulkMode[attr.id] ? (
+                      <div className={styles.bulkValueForm}>
+                        <textarea
+                          placeholder="Enter values (one per line or comma-separated)&#10;Example:&#10;Small&#10;Medium&#10;Large&#10;&#10;Or: Small, Medium, Large"
+                          value={bulkValues}
+                          onChange={(e) => setBulkValues(e.target.value)}
+                          rows={6}
+                          className={styles.bulkTextarea}
+                        />
+                        <button onClick={() => handleBulkAddValues(attr.id)} className={styles.btnPrimary}>
+                          Add All Values
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={styles.addValueForm}>
+                        <input
+                          type="text"
+                          placeholder="Value name"
+                          value={newValue.value}
+                          onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
+                        />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, false)}
+                        />
+                        {newValue.imageUrl && <img src={newValue.imageUrl} alt="Preview" className={styles.previewImg} />}
+                        <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
+                      </div>
+                    )}
 
                     <div className={styles.valuesList}>
                       {attr.attribute_values?.map(val => (
