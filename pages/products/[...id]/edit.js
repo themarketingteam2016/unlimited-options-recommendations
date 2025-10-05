@@ -54,8 +54,8 @@ export default function ProductEdit() {
       const foundProduct = productsData.find(p => p.id === id);
       setProduct(foundProduct);
 
-      // Fetch existing recommendations
-      const recsRes = await fetch(`/api/products/${encodedIdForApi}/recommendations`);
+      // Fetch existing recommendations using query params
+      const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(id)}`);
       const recsData = await recsRes.json();
       setSelectedRecommendations(
         Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
@@ -73,7 +73,7 @@ export default function ProductEdit() {
 
   const fetchVariants = async () => {
     try {
-      const res = await fetch(`/api/products/${encodedIdForApi}/variants`);
+      const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`);
       const data = await res.json();
       setVariants(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -106,7 +106,7 @@ export default function ProductEdit() {
         return;
       }
 
-      const res = await fetch(`/api/products/${encodedIdForApi}/variants/generate`, {
+      const res = await fetch(`/api/variants/generate?productId=${encodeURIComponent(id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +140,7 @@ export default function ProductEdit() {
 
     try {
       if (bulkAction === 'delete') {
-        const res = await fetch(`/api/products/${encodedIdForApi}/variants`, {
+        const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variantIds: selectedVariants })
@@ -160,7 +160,7 @@ export default function ProductEdit() {
             ...(bulkAction === 'stock' ? { stock_quantity: parseInt(bulkValue) } : {})
           }));
 
-        const res = await fetch(`/api/products/${encodedIdForApi}/variants`, {
+        const res = await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variants: updatedVariants })
@@ -187,7 +187,7 @@ export default function ProductEdit() {
     updatedVariant[field] = value;
 
     try {
-      await fetch(`/api/products/${encodedIdForApi}/variants`, {
+      await fetch(`/api/variants?productId=${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variants: [updatedVariant] })
@@ -207,7 +207,7 @@ export default function ProductEdit() {
 
   const handleSaveRecommendations = async () => {
     try {
-      const res = await fetch(`/api/products/${encodedIdForApi}/recommendations`, {
+      const res = await fetch(`/api/recommendations?productId=${encodeURIComponent(id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
