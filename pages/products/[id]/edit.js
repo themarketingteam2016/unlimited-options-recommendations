@@ -21,6 +21,8 @@ export default function ProductEdit() {
   const [bulkValue, setBulkValue] = useState('');
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [allProducts, setAllProducts] = useState([]);
+  const [selectedRecommendations, setSelectedRecommendations] = useState([]);
 
   useEffect(() => {
     if (id) {
@@ -35,11 +37,20 @@ export default function ProductEdit() {
       const attrsData = await attrsRes.json();
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
 
-      // Fetch product (from demo data for now)
+      // Fetch all products
       const productsRes = await fetch('/api/products');
       const productsData = await productsRes.json();
+      setAllProducts(Array.isArray(productsData) ? productsData : []);
+
       const foundProduct = productsData.find(p => p.id === id);
       setProduct(foundProduct);
+
+      // Fetch existing recommendations
+      const recsRes = await fetch(`/api/products/${id}/recommendations`);
+      const recsData = await recsRes.json();
+      setSelectedRecommendations(
+        Array.isArray(recsData) ? recsData.map(r => r.recommended_product.id) : []
+      );
 
       // Fetch variants
       await fetchVariants();
@@ -177,6 +188,31 @@ export default function ProductEdit() {
     }
   };
 
+  const handleRecommendationToggle = (productId) => {
+    setSelectedRecommendations(prev =>
+      prev.includes(productId)
+        ? prev.filter(p => p !== productId)
+        : [...prev, productId].slice(0, 2) // Max 2 recommendations
+    );
+  };
+
+  const handleSaveRecommendations = async () => {
+    try {
+      const res = await fetch(`/api/products/${id}/recommendations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
+      });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Recommendations saved successfully!' });
+        setTimeout(() => setMessage(null), 3000);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to save recommendations' });
+    }
+  };
+
   if (loading) {
     return <div className={styles.loading}>Loading...</div>;
   }
@@ -247,6 +283,35 @@ export default function ProductEdit() {
             disabled={Object.values(selectedAttributes).filter(Boolean).length === 0}
           >
             Save & Generate Variants
+          </button>
+        </div>
+
+        <div className={styles.section}>
+          <h2>Product Recommendations</h2>
+          <p className={styles.subtitle}>Select up to 2 products to recommend on the product page</p>
+          <div className={styles.recommendationsGrid}>
+            {allProducts
+              .filter(p => p.id !== id)
+              .map(p => (
+                <div
+                  key={p.id}
+                  className={`${styles.recommendationCard} ${
+                    selectedRecommendations.includes(p.id) ? styles.selected : ''
+                  }`}
+                  onClick={() => handleRecommendationToggle(p.id)}
+                >
+                  {p.featuredImage && (
+                    <img src={p.featuredImage.url} alt={p.title} className={styles.recImage} />
+                  )}
+                  <h4>{p.title}</h4>
+                  {selectedRecommendations.includes(p.id) && (
+                    <span className={styles.selectedBadge}>✓ Selected</span>
+                  )}
+                </div>
+              ))}
+          </div>
+          <button className={styles.btnPrimary} onClick={handleSaveRecommendations}>
+            Save Recommendations
           </button>
         </div>
 
