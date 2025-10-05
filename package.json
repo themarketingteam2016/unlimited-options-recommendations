@@ -13,6 +13,7 @@
   "dependencies": {
     "@shopify/shopify-app-express": "^5.0.8",
     "@shopify/shopify-app-session-storage-sqlite": "^4.0.8",
+    "dotenv": "^17.2.3",
     "next": "^14.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
