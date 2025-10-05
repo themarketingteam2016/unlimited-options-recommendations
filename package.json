@@ -1,18 +1,26 @@
 {
-  "name": "my-node-app",
+  "name": "unlimited-options-recommendations",
   "version": "1.0.0",
-  "main": "web/index.js",
+  "description": "Shopify app with unlimited product options and variants",
+  "main": "pages/index.js",
   "license": "UNLICENSED",
   "scripts": {
-    "shopify": "shopify",
-    "build": "shopify app build",
-    "dev": "shopify app dev",
-    "info": "shopify app info",
-    "generate": "shopify app generate",
-    "deploy": "shopify app deploy"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
-    "@shopify/app": "^3.0.0",
-    "@shopify/cli": "^3.0.0"
+    "@shopify/shopify-app-express": "^5.0.8",
+    "@shopify/shopify-app-session-storage-sqlite": "^4.0.8",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.52.0",
+    "eslint-config-next": "^14.0.0"
   }
 }

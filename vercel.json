@@ -2,14 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "web/index.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "web/index.js"
+      "src": "package.json",
+      "use": "@vercel/next"
     }
   ],
   "env": {
