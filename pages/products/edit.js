@@ -24,6 +24,8 @@ export default function ProductEdit() {
   const [selectedRecommendations, setSelectedRecommendations] = useState([]);
   const [productImage, setProductImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showManualVariantForm, setShowManualVariantForm] = useState(false);
+  const [manualVariant, setManualVariant] = useState({});
 
   useEffect(() => {
     if (productId) {
@@ -87,6 +89,62 @@ export default function ProductEdit() {
         ? prev[attrId].filter(v => v !== valueId)
         : [...(prev[attrId] || []), valueId]
     }));
+  };
+
+  const handleAddManualVariant = async () => {
+    try {
+      const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
+
+      if (selectedAttrs.length === 0) {
+        setMessage({ type: 'error', text: 'Please select at least one attribute first' });
+        return;
+      }
+
+      // Check if all attributes have values selected in manual variant
+      const missingAttrs = selectedAttrs.filter(attrId => !manualVariant[attrId]);
+      if (missingAttrs.length > 0) {
+        setMessage({ type: 'error', text: 'Please select a value for all attributes' });
+        return;
+      }
+
+      console.log('Adding manual variant:', manualVariant);
+
+      // Create the variant combination
+      const combination = selectedAttrs.map(attrId => {
+        const attr = attributes.find(a => a.id === attrId);
+        const value = attr.attribute_values.find(v => v.id === manualVariant[attrId]);
+        return {
+          attribute_id: attrId,
+          attribute_value_id: value.id,
+          attribute_name: attr.name,
+          value: value.value
+        };
+      });
+
+      const res = await fetch(`/api/variants/create?productId=${encodeURIComponent(productId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ combination })
+      });
+
+      const data = await res.json();
+      console.log('Response:', data);
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Manual variant created successfully!' });
+        setShowManualVariantForm(false);
+        setManualVariant({});
+        await fetchVariants();
+        setTimeout(() => setMessage(null), 3000);
+      } else {
+        setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
+        setTimeout(() => setMessage(null), 5000);
+      }
+    } catch (error) {
+      console.error('Add manual variant error:', error);
+      setMessage({ type: 'error', text: `Failed to add variant: ${error.message}` });
+      setTimeout(() => setMessage(null), 5000);
+    }
   };
 
   const handleGenerateVariants = async (mode) => {
@@ -367,13 +425,70 @@ export default function ProductEdit() {
             ))}
           </div>
 
-          <button
-            className={styles.btnPrimary}
-            onClick={() => setShowGenerateModal(true)}
-            disabled={Object.values(selectedAttributes).every(v => !v)}
-          >
-            Generate Variants
-          </button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <button
+              className={styles.btnPrimary}
+              onClick={() => setShowGenerateModal(true)}
+              disabled={Object.values(selectedAttributes).every(v => !v)}
+            >
+              Generate All Variants
+            </button>
+            <button
+              className={styles.btnSecondary}
+              onClick={() => setShowManualVariantForm(!showManualVariantForm)}
+              disabled={Object.values(selectedAttributes).every(v => !v)}
+            >
+              {showManualVariantForm ? 'Cancel Manual Add' : 'Add Manual Variant'}
+            </button>
+          </div>
+
+          {/* Manual Variant Form */}
+          {showManualVariantForm && (
+            <div className={styles.section} style={{ marginTop: '20px', background: '#f6f6f7', border: '2px solid #008060' }}>
+              <h3>Add Manual Variant</h3>
+              <p className={styles.subtitle}>Select one value for each attribute to create a single variant</p>
+
+              <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
+                {Object.keys(selectedAttributes)
+                  .filter(k => selectedAttributes[k])
+                  .map(attrId => {
+                    const attr = attributes.find(a => a.id === attrId);
+                    return (
+                      <div key={attrId}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                          {attr.name}
+                        </label>
+                        <select
+                          value={manualVariant[attrId] || ''}
+                          onChange={(e) => setManualVariant({ ...manualVariant, [attrId]: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            border: '1px solid #c9cccf',
+                            borderRadius: '6px',
+                            fontSize: '14px'
+                          }}
+                        >
+                          <option value="">-- Select {attr.name} --</option>
+                          {attr.attribute_values?.map(val => (
+                            <option key={val.id} value={val.id}>
+                              {val.value}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <button
+                className={styles.btnPrimary}
+                onClick={handleAddManualVariant}
+              >
+                Add This Variant
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Generate Modal */}
