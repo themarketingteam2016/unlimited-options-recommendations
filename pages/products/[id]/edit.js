@@ -6,7 +6,8 @@ import styles from '../../../styles/ProductEdit.module.css';
 
 export default function ProductEdit() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id: encodedId } = router.query;
+  const id = encodedId ? decodeURIComponent(encodedId) : null;
 
   const [product, setProduct] = useState(null);
   const [attributes, setAttributes] = useState([]);
