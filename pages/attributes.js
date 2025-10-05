@@ -153,8 +153,7 @@ export default function Attributes() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          value: editingValue.value,
-          imageUrl: editingValue.image_url
+          value: editingValue.value
         })
       });
 
@@ -327,12 +326,6 @@ export default function Attributes() {
                                 value={editingValue.value}
                                 onChange={(e) => setEditingValue({ ...editingValue, value: e.target.value })}
                               />
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleImageUpload(e, true)}
-                              />
-                              {editingValue.image_url && <img src={editingValue.image_url} alt="" className={styles.valueImage} />}
                               <button onClick={handleUpdateValue} className={styles.btnPrimary}>Save</button>
                               <button onClick={() => setEditingValue(null)} className={styles.btnSecondary}>Cancel</button>
                             </>

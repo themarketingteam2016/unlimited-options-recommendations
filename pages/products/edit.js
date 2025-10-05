@@ -22,6 +22,8 @@ export default function ProductEdit() {
   const [loading, setLoading] = useState(true);
   const [allProducts, setAllProducts] = useState([]);
   const [selectedRecommendations, setSelectedRecommendations] = useState([]);
+  const [productImage, setProductImage] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     if (productId) {
@@ -207,6 +209,42 @@ export default function ProductEdit() {
     );
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+      setProductImage(base64);
+
+      // Auto-save the image
+      setUploadingImage(true);
+      try {
+        const res = await fetch(`/api/products/update?productId=${encodeURIComponent(productId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_url: base64 })
+        });
+
+        if (res.ok) {
+          setMessage({ type: 'success', text: 'Product image updated successfully!' });
+          setTimeout(() => setMessage(null), 3000);
+          // Update product state
+          setProduct({ ...product, image_url: base64 });
+        } else {
+          setMessage({ type: 'error', text: 'Failed to update product image' });
+        }
+      } catch (error) {
+        console.error('Image upload error:', error);
+        setMessage({ type: 'error', text: 'Failed to upload image' });
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveRecommendations = async () => {
     try {
       console.log('Saving recommendations:', selectedRecommendations);
@@ -265,6 +303,32 @@ export default function ProductEdit() {
             {message.text}
           </div>
         )}
+
+        {/* Product Image */}
+        <div className={styles.section}>
+          <h2>Product Image</h2>
+          <p className={styles.subtitle}>Upload a custom image for this product</p>
+
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+            {(productImage || product.image_url || product.featuredImage?.url) && (
+              <img
+                src={productImage || product.image_url || product.featuredImage?.url}
+                alt={product.title}
+                style={{ width: '200px', height: '200px', objectFit: 'cover', borderRadius: '8px' }}
+              />
+            )}
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                style={{ marginBottom: '10px' }}
+                disabled={uploadingImage}
+              />
+              {uploadingImage && <p>Uploading image...</p>}
+            </div>
+          </div>
+        </div>
 
         {/* Attributes Selection */}
         <div className={styles.section}>
