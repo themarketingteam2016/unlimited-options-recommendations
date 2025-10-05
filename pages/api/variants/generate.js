@@ -56,6 +56,31 @@ export default async function handler(req, res) {
 
     const productId = product.id;
 
+    // If selectedValues provided, assign those attributes to the product first
+    if (selectedValues && Object.keys(selectedValues).length > 0) {
+      const attributeIds = Object.keys(selectedValues);
+
+      console.log('Assigning attributes to product:', attributeIds);
+
+      // Delete existing product attributes
+      await supabaseAdmin
+        .from('product_attributes')
+        .delete()
+        .eq('product_id', productId);
+
+      // Insert new product attributes
+      const attrInserts = attributeIds.map(attrId => ({
+        product_id: productId,
+        attribute_id: attrId
+      }));
+
+      await supabaseAdmin
+        .from('product_attributes')
+        .insert(attrInserts);
+
+      console.log('Attributes assigned successfully');
+    }
+
     // Get product attributes with values
     const { data: productAttrs, error: attrError } = await supabaseAdmin
       .from('product_attributes')
@@ -77,8 +102,10 @@ export default async function handler(req, res) {
       .map(pa => pa.attribute)
       .filter(attr => attr && attr.attribute_values && attr.attribute_values.length > 0);
 
+    console.log('Product attributes found:', attributes.length);
+
     if (attributes.length === 0) {
-      return res.status(400).json({ error: 'No attributes with values found for this product' });
+      return res.status(400).json({ error: 'No attributes with values found for this product. Please select attributes and their values first.' });
     }
 
     // Filter attributes based on selected values if provided

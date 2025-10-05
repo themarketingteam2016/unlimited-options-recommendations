@@ -96,6 +96,10 @@ export default function ProductEdit() {
         return;
       }
 
+      console.log('Generating variants with mode:', mode);
+      console.log('Selected attributes:', selectedAttributes);
+      console.log('Selected values:', selectedValues);
+
       const res = await fetch(`/api/variants/generate?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,15 +114,23 @@ export default function ProductEdit() {
         })
       });
 
+      console.log('Response status:', res.status);
+      const data = await res.json();
+      console.log('Response data:', data);
+
       if (res.ok) {
-        const data = await res.json();
         setMessage({ type: 'success', text: `Generated ${data.count} variants successfully!` });
         setShowGenerateModal(false);
         await fetchVariants();
         setTimeout(() => setMessage(null), 3000);
+      } else {
+        setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
+        setTimeout(() => setMessage(null), 5000);
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to generate variants' });
+      console.error('Generate variants error:', error);
+      setMessage({ type: 'error', text: `Failed to generate variants: ${error.message}` });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
