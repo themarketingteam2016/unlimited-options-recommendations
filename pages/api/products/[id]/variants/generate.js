@@ -30,7 +30,7 @@ function generateCombinations(attributes) {
 }
 
 export default async function handler(req, res) {
-  const { id: productId } = req.query;
+  const { id: shopifyProductId } = req.query;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -38,6 +38,19 @@ export default async function handler(req, res) {
 
   try {
     const { mode, selectedValues } = req.body; // mode: 'scratch' or 'modify'
+
+    // Get internal product ID from shopify_product_id
+    const { data: product } = await supabaseAdmin
+      .from('products')
+      .select('id')
+      .eq('shopify_product_id', shopifyProductId)
+      .single();
+
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const productId = product.id;
 
     // Get product attributes with values
     const { data: productAttrs, error: attrError } = await supabaseAdmin

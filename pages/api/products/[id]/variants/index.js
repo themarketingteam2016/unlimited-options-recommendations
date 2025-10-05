@@ -1,10 +1,21 @@
 import { supabaseAdmin } from '../../../../../lib/supabase';
 
 export default async function handler(req, res) {
-  const { id: productId } = req.query;
+  const { id: shopifyProductId } = req.query;
 
   if (req.method === 'GET') {
     try {
+      // Get internal product ID from shopify_product_id
+      const { data: product } = await supabaseAdmin
+        .from('products')
+        .select('id')
+        .eq('shopify_product_id', shopifyProductId)
+        .single();
+
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
       const { data, error } = await supabaseAdmin
         .from('variants')
         .select(`
@@ -22,7 +33,7 @@ export default async function handler(req, res) {
             )
           )
         `)
-        .eq('product_id', productId)
+        .eq('product_id', product.id)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
