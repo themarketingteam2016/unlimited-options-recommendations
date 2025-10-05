@@ -33,14 +33,14 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   // Handle catch-all route - id will be an array
-  // If single element, it's fully encoded - decode it
-  // If multiple elements, join them (backward compatibility)
+  // If single element, it's base64 encoded - decode it
+  // If multiple elements, join them (backward compatibility for old URLs)
   const shopifyProductId = Array.isArray(id)
-    ? (id.length === 1 ? decodeURIComponent(id[0]) : id.join('/'))
+    ? (id.length === 1 ? Buffer.from(id[0], 'base64').toString('utf-8') : id.join('/'))
     : id;
 
   console.log('Received id array:', id);
-  console.log('Reconstructed shopifyProductId:', shopifyProductId);
+  console.log('Decoded shopifyProductId:', shopifyProductId);
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

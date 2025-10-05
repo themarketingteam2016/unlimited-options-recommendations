@@ -12,12 +12,12 @@ export default function ProductEdit() {
   // Handle catch-all route - id will be an array
   const id = idParam && Array.isArray(idParam) ? idParam.join('/') : idParam;
 
-  // For API calls, fully encode the ID as a single segment
-  const encodedIdForApi = id ? encodeURIComponent(id) : null;
+  // For API calls, use base64 encoding to avoid URL issues
+  const encodedIdForApi = id ? btoa(id) : null;
 
   console.log('Router idParam:', idParam);
   console.log('Reconstructed id:', id);
-  console.log('Encoded for API:', encodedIdForApi);
+  console.log('Base64 encoded for API:', encodedIdForApi);
 
   const [product, setProduct] = useState(null);
   const [attributes, setAttributes] = useState([]);

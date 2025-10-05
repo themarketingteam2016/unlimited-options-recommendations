@@ -205,7 +205,7 @@ export default function Home() {
                     )}
                     <h3>{product.title}</h3>
                     <p className={styles.productStatus}>{product.status}</p>
-                    <Link href={`/products/${encodeURIComponent(product.id)}/edit`} className={styles.editButton}>
+                    <Link href={`/products/${btoa(product.id)}/edit`} className={styles.editButton}>
                       Edit Variants
                     </Link>
                   </div>
