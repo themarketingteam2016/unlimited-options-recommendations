@@ -2,20 +2,13 @@
   min-height: 100vh;
   padding: 0;
   display: flex;
-  flex-direction: column;
   background: #f6f6f7;
 }
 
 .main {
-  max-width: 1200px;
-  margin: 0 auto;
+  flex: 1;
   padding: 30px;
-  width: 100%;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
-  margin-bottom: 20px;
 }
 
 .title {

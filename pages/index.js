@@ -22,9 +22,6 @@ export default function Home() {
     try {
       const res = await fetch('/api/products');
       const data = await res.json();
-      console.log('Fetched products:', data);
-      console.log('Is array?', Array.isArray(data));
-      console.log('Products count:', data.length);
       setProducts(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
