@@ -108,10 +108,30 @@ export default function ProductEdit() {
   };
 
   const handleAttributeToggle = (attrId) => {
+    const isCurrentlySelected = selectedAttributes[attrId];
+
     setSelectedAttributes(prev => ({
       ...prev,
       [attrId]: !prev[attrId]
     }));
+
+    // If selecting the attribute, select all its values
+    if (!isCurrentlySelected) {
+      const attr = attributes.find(a => a.id === attrId);
+      if (attr && attr.attribute_values) {
+        const allValueIds = attr.attribute_values.map(v => v.id);
+        setSelectedValues(prev => ({
+          ...prev,
+          [attrId]: allValueIds
+        }));
+      }
+    } else {
+      // If deselecting, clear all values
+      setSelectedValues(prev => ({
+        ...prev,
+        [attrId]: []
+      }));
+    }
   };
 
   const handleValueToggle = (attrId, valueId) => {
@@ -606,46 +626,60 @@ export default function ProductEdit() {
 
                 {attr.attribute_values?.length > 0 && (
                   <div className={styles.valuesGrid}>
-                    {attr.attribute_values.map(val => (
-                      <div key={val.id} className={styles.valueItemWithImage}>
-                        <div className={styles.valueCheckbox}>
-                          <label className={styles.valueLabel}>
-                            <input
-                              type="checkbox"
-                              checked={selectedValues[attr.id]?.includes(val.id) || false}
-                              onChange={() => handleValueToggle(attr.id, val.id)}
-                            />
-                            <span>{val.value}</span>
-                          </label>
-                        </div>
-
-                        {/* Show image upload only when value is selected */}
-                        {selectedValues[attr.id]?.includes(val.id) && (
-                          <div className={styles.valueImageSection}>
-                            {(attributeValueImages[val.id] || val.image_url) ? (
-                              <img
-                                src={attributeValueImages[val.id] || val.image_url}
-                                alt={val.value}
-                                className={styles.valueImgLarge}
-                              />
-                            ) : (
-                              <div className={styles.imagePlaceholder}>
-                                <span>📷</span>
-                              </div>
-                            )}
-                            <label className={styles.uploadButtonSmall}>
-                              {(attributeValueImages[val.id] || val.image_url) ? 'Change' : 'Upload Image'}
+                    {attr.attribute_values.map(val => {
+                      const isSelected = selectedValues[attr.id]?.includes(val.id) || false;
+                      return (
+                        <div
+                          key={val.id}
+                          className={styles.valueItemWithImage}
+                          style={{
+                            borderColor: isSelected ? '#008060' : '#e3e5e7',
+                            background: isSelected ? '#f6faf9' : 'white',
+                            boxShadow: isSelected ? '0 0 0 2px rgba(0, 128, 96, 0.1)' : 'none'
+                          }}
+                        >
+                          <div className={styles.valueCheckbox}>
+                            <label className={styles.valueLabel}>
                               <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleAttributeValueImageUpload(val.id, e)}
-                                style={{ display: 'none' }}
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleValueToggle(attr.id, val.id)}
                               />
+                              <span style={{ fontWeight: isSelected ? '600' : '400' }}>
+                                {val.value}
+                                {isSelected && <span style={{ marginLeft: '6px', color: '#008060' }}>✓</span>}
+                              </span>
                             </label>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Show image upload only when value is selected */}
+                          {isSelected && (
+                            <div className={styles.valueImageSection}>
+                              {(attributeValueImages[val.id] || val.image_url) ? (
+                                <img
+                                  src={attributeValueImages[val.id] || val.image_url}
+                                  alt={val.value}
+                                  className={styles.valueImgLarge}
+                                />
+                              ) : (
+                                <div className={styles.imagePlaceholder}>
+                                  <span>📷</span>
+                                </div>
+                              )}
+                              <label className={styles.uploadButtonSmall}>
+                                {(attributeValueImages[val.id] || val.image_url) ? 'Change' : 'Upload Image'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleAttributeValueImageUpload(val.id, e)}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
