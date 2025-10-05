@@ -736,6 +736,18 @@ export default function ProductEdit() {
                     <td>
                       {variant.variant_options?.map(opt => {
                         const attr = attributes.find(a => a.id === opt.attribute_id);
+                        console.log('Variant option:', opt);
+                        console.log('Found attribute:', attr);
+                        console.log('Attribute values:', attr?.attribute_values);
+
+                        if (!attr || !attr.attribute_values) {
+                          return (
+                            <div key={opt.id} style={{ marginBottom: '8px' }}>
+                              <strong>{opt.attribute.name}:</strong> {opt.attribute_value.value}
+                            </div>
+                          );
+                        }
+
                         return (
                           <div key={opt.id} style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '600', minWidth: '60px' }}>
@@ -752,7 +764,7 @@ export default function ProductEdit() {
                                 minWidth: '120px'
                               }}
                             >
-                              {attr?.attribute_values?.map(val => (
+                              {attr.attribute_values.map(val => (
                                 <option key={val.id} value={val.id}>
                                   {val.value}
                                 </option>
