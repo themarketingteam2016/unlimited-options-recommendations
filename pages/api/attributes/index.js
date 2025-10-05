@@ -6,13 +6,29 @@ export default async function handler(req, res) {
       const { data, error } = await supabaseAdmin
         .from('attributes')
         .select(`
-          *,
-          attribute_values (*)
+          id,
+          name,
+          slug,
+          is_primary,
+          display_order,
+          created_at,
+          updated_at,
+          attribute_values (
+            id,
+            value,
+            slug,
+            image_url,
+            display_order
+          )
         `)
         .order('display_order', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error fetching attributes:', error);
+        throw error;
+      }
 
+      console.log('Attributes API returning:', JSON.stringify(data, null, 2));
       res.status(200).json(data || []);
     } catch (error) {
       console.error('Failed to fetch attributes:', error);

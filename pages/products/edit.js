@@ -40,8 +40,22 @@ export default function ProductEdit() {
     try {
       // Fetch all attributes
       const attrsRes = await fetch('/api/attributes');
+      if (!attrsRes.ok) {
+        console.error('Attributes API error:', attrsRes.status, attrsRes.statusText);
+        throw new Error(`Failed to fetch attributes: ${attrsRes.status}`);
+      }
       const attrsData = await attrsRes.json();
-      console.log('Fetched attributes:', attrsData);
+      console.log('=== FETCHED ATTRIBUTES ===');
+      console.log('Response status:', attrsRes.status);
+      console.log('Data:', attrsData);
+      console.log('First attribute:', attrsData[0]);
+      console.log('First attribute values:', attrsData[0]?.attribute_values);
+      console.log('=========================');
+
+      if (!Array.isArray(attrsData)) {
+        console.error('Attributes data is not an array:', attrsData);
+      }
+
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
 
       // Fetch all products
@@ -736,18 +750,24 @@ export default function ProductEdit() {
                       </div>
                     </td>
                     <td>
-                      {variant.variant_options?.map(opt => {
+                      {variant.variant_options?.map((opt, idx) => {
+                        // Only log first option to avoid spam
+                        if (idx === 0 && variant.id === variants[0]?.id) {
+                          console.log('=== DROPDOWN DEBUG (first variant) ===');
+                          console.log('Total attributes in state:', attributes.length);
+                          console.log('Attributes state:', attributes);
+                          console.log('Looking for attribute ID:', opt.attribute_id);
+                          console.log('Available attribute IDs:', attributes.map(a => a.id));
+                        }
+
                         // Find attribute by converting IDs to strings for comparison
                         const attr = attributes.find(a => String(a.id) === String(opt.attribute_id));
 
-                        console.log('Processing option:', {
-                          optionId: opt.id,
-                          attributeId: opt.attribute_id,
-                          attributeName: opt.attribute.name,
-                          currentValue: opt.attribute_value.value,
-                          foundAttr: attr,
-                          availableValues: attr?.attribute_values
-                        });
+                        if (idx === 0 && variant.id === variants[0]?.id) {
+                          console.log('Found attribute:', attr);
+                          console.log('Has values?', attr?.attribute_values);
+                          console.log('====================================');
+                        }
 
                         // Fallback if attribute or values not found
                         if (!attr || !attr.attribute_values || attr.attribute_values.length === 0) {
