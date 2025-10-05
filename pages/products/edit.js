@@ -26,6 +26,9 @@ export default function ProductEdit() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showManualVariantForm, setShowManualVariantForm] = useState(false);
   const [manualVariant, setManualVariant] = useState({});
+  const [variantImages, setVariantImages] = useState({});
+  const [editingOptions, setEditingOptions] = useState({});
+  const [attributeValueImages, setAttributeValueImages] = useState({});
 
   useEffect(() => {
     if (productId) {
@@ -57,6 +60,17 @@ export default function ProductEdit() {
 
       // Fetch variants
       await fetchVariants();
+
+      // Fetch attribute value images for this product
+      const imagesRes = await fetch(`/api/attribute-images?productId=${encodeURIComponent(productId)}`);
+      const imagesData = await imagesRes.json();
+      if (Array.isArray(imagesData)) {
+        const imageMap = {};
+        imagesData.forEach(img => {
+          imageMap[img.attribute_value_id] = img.image_url;
+        });
+        setAttributeValueImages(imageMap);
+      }
 
       setLoading(false);
     } catch (error) {
@@ -303,6 +317,127 @@ export default function ProductEdit() {
     reader.readAsDataURL(file);
   };
 
+  const handleVariantImageUpload = async (variantId, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+      setVariantImages({ ...variantImages, [variantId]: base64 });
+
+      // Auto-save the variant image
+      try {
+        const updatedVariant = variants.find(v => v.id === variantId);
+        await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variants: [{ ...updatedVariant, image_url: base64 }]
+          })
+        });
+
+        setMessage({ type: 'success', text: 'Variant image updated!' });
+        await fetchVariants();
+        setTimeout(() => setMessage(null), 2000);
+      } catch (error) {
+        console.error('Variant image upload error:', error);
+        setMessage({ type: 'error', text: 'Failed to upload variant image' });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteVariant = async (variantId) => {
+    if (!confirm('Are you sure you want to delete this variant?')) return;
+
+    try {
+      const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variantIds: [variantId] })
+      });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Variant deleted successfully!' });
+        await fetchVariants();
+        setTimeout(() => setMessage(null), 3000);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete variant' });
+    }
+  };
+
+  const handleOptionChange = async (variantId, attributeId, newValueId) => {
+    // Update the variant option
+    setEditingOptions({ ...editingOptions, [variantId]: { ...editingOptions[variantId], [attributeId]: newValueId } });
+
+    // Save the change
+    try {
+      const variant = variants.find(v => v.id === variantId);
+      const updatedOptions = variant.variant_options.map(opt =>
+        opt.attribute_id === attributeId
+          ? { ...opt, attribute_value_id: newValueId }
+          : opt
+      );
+
+      // Create new combination key
+      const combination = updatedOptions.map(opt => {
+        const attr = attributes.find(a => a.id === opt.attribute_id);
+        const value = attr.attribute_values.find(v => v.id === opt.attribute_value_id);
+        return `${attr.name}:${value.value}`;
+      }).sort().join('|');
+
+      const res = await fetch(`/api/variants/update-options?productId=${encodeURIComponent(productId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variantId,
+          options: updatedOptions,
+          combinationKey: combination
+        })
+      });
+
+      if (res.ok) {
+        await fetchVariants();
+      }
+    } catch (error) {
+      console.error('Failed to update variant option:', error);
+    }
+  };
+
+  const handleAttributeValueImageUpload = async (attributeValueId, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+      setAttributeValueImages({ ...attributeValueImages, [attributeValueId]: base64 });
+
+      // Auto-save the image
+      try {
+        const res = await fetch(`/api/attribute-images?productId=${encodeURIComponent(productId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attributeValueId,
+            imageUrl: base64
+          })
+        });
+
+        if (res.ok) {
+          setMessage({ type: 'success', text: 'Image uploaded!' });
+          setTimeout(() => setMessage(null), 2000);
+        }
+      } catch (error) {
+        console.error('Image upload error:', error);
+        setMessage({ type: 'error', text: 'Failed to upload image' });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveRecommendations = async () => {
     try {
       console.log('Saving recommendations:', selectedRecommendations);
@@ -368,30 +503,47 @@ export default function ProductEdit() {
           <p className={styles.subtitle}>Upload a custom image for this product</p>
 
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            {(productImage || product.image_url || product.featuredImage?.url) && (
+            {(productImage || product.image_url || product.featuredImage?.url) ? (
               <img
                 src={productImage || product.image_url || product.featuredImage?.url}
                 alt={product.title}
-                style={{ width: '200px', height: '200px', objectFit: 'cover', borderRadius: '8px' }}
+                style={{ width: '200px', height: '200px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e3e5e7' }}
               />
+            ) : (
+              <div style={{
+                width: '200px',
+                height: '200px',
+                border: '2px dashed #c9cccf',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '48px',
+                color: '#c9cccf'
+              }}>
+                📷
+              </div>
             )}
             <div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                style={{ marginBottom: '10px' }}
-                disabled={uploadingImage}
-              />
-              {uploadingImage && <p>Uploading image...</p>}
+              <label className={styles.uploadButton} style={{ padding: '10px 20px', fontSize: '14px' }}>
+                {(productImage || product.image_url) ? 'Change Product Image' : 'Upload Product Image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              {uploadingImage && <p style={{ marginTop: '10px', fontSize: '14px', color: '#6d7175' }}>Uploading image...</p>}
             </div>
           </div>
         </div>
 
         {/* Attributes Selection */}
         <div className={styles.section}>
-          <h2>Select Attributes</h2>
-          <p className={styles.subtitle}>Choose which attributes to use for variant generation</p>
+          <h2>Attributes & Values</h2>
+          <p className={styles.subtitle}>Select attributes and their values to create product variations</p>
 
           <div className={styles.attributesGrid}>
             {attributes.map(attr => (
@@ -402,22 +554,51 @@ export default function ProductEdit() {
                     checked={selectedAttributes[attr.id] || false}
                     onChange={() => handleAttributeToggle(attr.id)}
                   />
-                  {attr.name}
+                  <span style={{ fontSize: '15px' }}>{attr.name}</span>
                   {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                 </label>
 
                 {selectedAttributes[attr.id] && attr.attribute_values?.length > 0 && (
                   <div className={styles.valuesGrid}>
                     {attr.attribute_values.map(val => (
-                      <label key={val.id} className={styles.valueLabel}>
-                        <input
-                          type="checkbox"
-                          checked={selectedValues[attr.id]?.includes(val.id) || false}
-                          onChange={() => handleValueToggle(attr.id, val.id)}
-                        />
-                        {val.image_url && <img src={val.image_url} alt={val.value} className={styles.valueImg} />}
-                        {val.value}
-                      </label>
+                      <div key={val.id} className={styles.valueItemWithImage}>
+                        <div className={styles.valueCheckbox}>
+                          <label className={styles.valueLabel}>
+                            <input
+                              type="checkbox"
+                              checked={selectedValues[attr.id]?.includes(val.id) || false}
+                              onChange={() => handleValueToggle(attr.id, val.id)}
+                            />
+                            <span>{val.value}</span>
+                          </label>
+                        </div>
+
+                        {/* Show image upload only when value is selected */}
+                        {selectedValues[attr.id]?.includes(val.id) && (
+                          <div className={styles.valueImageSection}>
+                            {(attributeValueImages[val.id] || val.image_url) ? (
+                              <img
+                                src={attributeValueImages[val.id] || val.image_url}
+                                alt={val.value}
+                                className={styles.valueImgLarge}
+                              />
+                            ) : (
+                              <div className={styles.imagePlaceholder}>
+                                <span>📷</span>
+                              </div>
+                            )}
+                            <label className={styles.uploadButtonSmall}>
+                              {(attributeValueImages[val.id] || val.image_url) ? 'Change' : 'Upload Image'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleAttributeValueImageUpload(val.id, e)}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -431,114 +612,65 @@ export default function ProductEdit() {
               onClick={() => setShowGenerateModal(true)}
               disabled={Object.values(selectedAttributes).every(v => !v)}
             >
-              Generate All Variants
-            </button>
-            <button
-              className={styles.btnSecondary}
-              onClick={() => setShowManualVariantForm(!showManualVariantForm)}
-              disabled={Object.values(selectedAttributes).every(v => !v)}
-            >
-              {showManualVariantForm ? 'Cancel Manual Add' : 'Add Manual Variant'}
+              Generate Variations from Selected
             </button>
           </div>
-
-          {/* Manual Variant Form */}
-          {showManualVariantForm && (
-            <div className={styles.section} style={{ marginTop: '20px', background: '#f6f6f7', border: '2px solid #008060' }}>
-              <h3>Add Manual Variant</h3>
-              <p className={styles.subtitle}>Select one value for each attribute to create a single variant</p>
-
-              <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
-                {Object.keys(selectedAttributes)
-                  .filter(k => selectedAttributes[k])
-                  .map(attrId => {
-                    const attr = attributes.find(a => a.id === attrId);
-                    return (
-                      <div key={attrId}>
-                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-                          {attr.name}
-                        </label>
-                        <select
-                          value={manualVariant[attrId] || ''}
-                          onChange={(e) => setManualVariant({ ...manualVariant, [attrId]: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '10px',
-                            border: '1px solid #c9cccf',
-                            borderRadius: '6px',
-                            fontSize: '14px'
-                          }}
-                        >
-                          <option value="">-- Select {attr.name} --</option>
-                          {attr.attribute_values?.map(val => (
-                            <option key={val.id} value={val.id}>
-                              {val.value}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              <button
-                className={styles.btnPrimary}
-                onClick={handleAddManualVariant}
-              >
-                Add This Variant
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Generate Modal */}
         {showGenerateModal && (
           <div className={styles.modal} onClick={() => setShowGenerateModal(false)}>
             <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
-              <h3>Generate Variants</h3>
-              <p>Choose how to generate variants:</p>
-              <div className={styles.modalActions}>
+              <h3>Generate Variations</h3>
+              <p>This will create all possible combinations of the selected attributes and values.</p>
+              <p style={{ fontSize: '13px', color: '#6d7175', marginTop: '10px' }}>
+                Choose how to proceed:
+              </p>
+              <div className={styles.modalActions} style={{ marginTop: '20px' }}>
                 <button className={styles.btnSecondary} onClick={() => setShowGenerateModal(false)}>
                   Cancel
                 </button>
                 <button className={styles.btnPrimary} onClick={() => handleGenerateVariants('modify')}>
-                  Add to Existing
+                  Add to Existing Variations
                 </button>
                 <button className={styles.btnDanger} onClick={() => handleGenerateVariants('scratch')}>
-                  Replace All (From Scratch)
+                  Replace All Variations
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Variants Table */}
-        {variants.length > 0 && (
+        {/* Variants Section */}
+        {(variants.length > 0 || Object.keys(selectedAttributes).filter(k => selectedAttributes[k]).length > 0) && (
           <div className={styles.section}>
             <div className={styles.variantsHeader}>
-              <h2>Variants ({variants.length})</h2>
-              <div className={styles.bulkActions}>
-                <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
-                  <option value="">Bulk Actions</option>
-                  <option value="price">Set Price</option>
-                  <option value="stock">Set Stock</option>
-                  <option value="delete">Delete</option>
-                </select>
-                {(bulkAction === 'price' || bulkAction === 'stock') && (
-                  <input
-                    type="number"
-                    placeholder="Value"
-                    value={bulkValue}
-                    onChange={e => setBulkValue(e.target.value)}
-                  />
-                )}
-                <button className={styles.btnSecondary} onClick={handleBulkAction}>
-                  Apply
-                </button>
-              </div>
+              <h2>Product Variations ({variants.length})</h2>
+              {variants.length > 0 && (
+                <div className={styles.bulkActions}>
+                  <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
+                    <option value="">Bulk Actions</option>
+                    <option value="price">Set Price</option>
+                    <option value="stock">Set Stock</option>
+                    <option value="delete">Delete</option>
+                  </select>
+                  {(bulkAction === 'price' || bulkAction === 'stock') && (
+                    <input
+                      type="number"
+                      placeholder="Value"
+                      value={bulkValue}
+                      onChange={e => setBulkValue(e.target.value)}
+                    />
+                  )}
+                  <button className={styles.btnSecondary} onClick={handleBulkAction}>
+                    Apply
+                  </button>
+                </div>
+              )}
             </div>
 
-            <table className={styles.variantsTable}>
+            {variants.length > 0 && (
+              <table className={styles.variantsTable}>
               <thead>
                 <tr>
                   <th>
@@ -548,11 +680,13 @@ export default function ProductEdit() {
                       onChange={e => setSelectedVariants(e.target.checked ? variants.map(v => v.id) : [])}
                     />
                   </th>
+                  <th>Image</th>
                   <th>Options</th>
                   <th>Price</th>
                   <th>SKU</th>
                   <th>Stock</th>
                   <th>Active</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -570,14 +704,59 @@ export default function ProductEdit() {
                       />
                     </td>
                     <td>
-                      {variant.variant_options?.map(opt => (
-                        <div key={opt.id} className={styles.optionTag}>
-                          {opt.attribute_value.image_url && (
-                            <img src={opt.attribute_value.image_url} alt="" className={styles.optionImg} />
-                          )}
-                          {opt.attribute.name}: {opt.attribute_value.value}
-                        </div>
-                      ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                        {(variantImages[variant.id] || variant.image_url) ? (
+                          <img
+                            src={variantImages[variant.id] || variant.image_url}
+                            alt="Variant"
+                            style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e3e5e7' }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: '60px',
+                            height: '60px',
+                            border: '2px dashed #c9cccf',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '24px',
+                            color: '#c9cccf'
+                          }}>
+                            📷
+                          </div>
+                        )}
+                        <label className={styles.uploadButton}>
+                          {(variantImages[variant.id] || variant.image_url) ? 'Change' : 'Upload'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleVariantImageUpload(variant.id, e)}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                      </div>
+                    </td>
+                    <td>
+                      {variant.variant_options?.map(opt => {
+                        const attr = attributes.find(a => a.id === opt.attribute_id);
+                        return (
+                          <div key={opt.id} className={styles.optionTag}>
+                            <label style={{ fontSize: '11px', marginRight: '5px' }}>{opt.attribute.name}:</label>
+                            <select
+                              value={editingOptions[variant.id]?.[opt.attribute_id] || opt.attribute_value_id}
+                              onChange={(e) => handleOptionChange(variant.id, opt.attribute_id, e.target.value)}
+                              style={{ fontSize: '12px', padding: '2px' }}
+                            >
+                              {attr?.attribute_values?.map(val => (
+                                <option key={val.id} value={val.id}>
+                                  {val.value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
                     </td>
                     <td>
                       <input
@@ -608,10 +787,65 @@ export default function ProductEdit() {
                         onChange={e => handleVariantUpdate(variant.id, 'is_active', e.target.checked)}
                       />
                     </td>
+                    <td>
+                      <button
+                        onClick={() => handleDeleteVariant(variant.id)}
+                        className={styles.btnDelete}
+                        style={{ padding: '5px 10px', fontSize: '12px' }}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
+
+            {/* Manual Variant Creation - Inside Variants Section */}
+            {Object.keys(selectedAttributes).filter(k => selectedAttributes[k]).length > 0 && (
+              <div style={{ marginTop: '30px', padding: '20px', background: '#f6f6f7', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '10px', color: '#202223' }}>Add Individual Variation</h3>
+                <p style={{ fontSize: '13px', color: '#6d7175', marginBottom: '15px' }}>
+                  Create a single variation by selecting specific attribute values
+                </p>
+
+                <div className={styles.manualVariantForm}>
+                  <div className={styles.manualVariantOptions}>
+                    {Object.keys(selectedAttributes)
+                      .filter(k => selectedAttributes[k])
+                      .map(attrId => {
+                        const attr = attributes.find(a => a.id === attrId);
+                        return (
+                          <div key={attrId} className={styles.formGroup}>
+                            <label>{attr.name}</label>
+                            <select
+                              value={manualVariant[attrId] || ''}
+                              onChange={(e) => setManualVariant({ ...manualVariant, [attrId]: e.target.value })}
+                              className={styles.formSelect}
+                            >
+                              <option value="">Select {attr.name}...</option>
+                              {attr?.attribute_values?.map(val => (
+                                <option key={val.id} value={val.id}>
+                                  {val.value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <button
+                    onClick={handleAddManualVariant}
+                    className={styles.btnPrimary}
+                    style={{ marginTop: '15px' }}
+                  >
+                    Add Variation
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

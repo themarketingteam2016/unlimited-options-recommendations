@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS variants (
   stock_quantity INTEGER DEFAULT 0,
   is_active BOOLEAN DEFAULT TRUE,
   combination_key TEXT NOT NULL,
+  image_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(product_id, combination_key)

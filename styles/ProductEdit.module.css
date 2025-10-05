@@ -106,25 +106,80 @@
 
 .valuesGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 15px;
   margin-top: 15px;
   padding-left: 28px;
+}
+
+.valueItem {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.valueItemWithImage {
+  border: 1px solid #e3e5e7;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.valueItemWithImage:has(input[type="checkbox"]:checked) {
+  border-color: #008060;
+  background: #f6faf9;
+  padding: 10px;
+}
+
+.valueCheckbox {
+  display: flex;
+  align-items: center;
 }
 
 .valueLabel {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
-  border: 1px solid #e3e5e7;
-  border-radius: 4px;
   cursor: pointer;
-  transition: background 0.2s;
+  font-size: 14px;
 }
 
 .valueLabel:hover {
-  background: #f6f6f7;
+  color: #008060;
+}
+
+.valueImageSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.imagePlaceholder {
+  width: 80px;
+  height: 80px;
+  border: 2px dashed #c9cccf;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #c9cccf;
+}
+
+.valueImgLarge {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e3e5e7;
+}
+
+.imageUploadContainer {
+  padding-left: 8px;
 }
 
 .valueLabel input[type="checkbox"] {
@@ -381,4 +436,109 @@
   text-align: center;
   padding: 40px;
   color: #6d7175;
+}
+
+.btnDelete {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: #d72c0d;
+  color: white;
+  transition: background 0.2s;
+}
+
+.btnDelete:hover {
+  background: #bf2600;
+}
+
+.btnEdit {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: #f1f2f4;
+  color: #202223;
+  transition: background 0.2s;
+}
+
+.btnEdit:hover {
+  background: #e3e5e7;
+}
+
+.manualVariantForm {
+  margin-top: 15px;
+}
+
+.manualVariantOptions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.formGroup label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #202223;
+}
+
+.formSelect {
+  padding: 10px 12px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.formSelect:focus {
+  outline: none;
+  border-color: #008060;
+}
+
+.uploadButton {
+  padding: 6px 12px;
+  background: #008060;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: inline-block;
+  text-align: center;
+}
+
+.uploadButton:hover {
+  background: #006e52;
+}
+
+.uploadButtonSmall {
+  padding: 4px 10px;
+  background: #f1f2f4;
+  color: #202223;
+  border: 1px solid #c9cccf;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-block;
+  text-align: center;
+}
+
+.uploadButtonSmall:hover {
+  background: #008060;
+  color: white;
+  border-color: #008060;
 }

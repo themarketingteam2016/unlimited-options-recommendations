@@ -60,7 +60,8 @@ export default async function handler(req, res) {
             cost: variant.cost,
             sku: variant.sku,
             stock_quantity: variant.stock_quantity,
-            is_active: variant.is_active
+            is_active: variant.is_active,
+            image_url: variant.image_url
           })
           .eq('id', variant.id);
 
