@@ -1,10 +1,21 @@
 import { supabaseAdmin } from '../../../../lib/supabase';
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  const { id: shopifyProductId } = req.query;
 
   if (req.method === 'GET') {
     try {
+      // Get internal product ID from shopify_product_id
+      const { data: product } = await supabaseAdmin
+        .from('products')
+        .select('id')
+        .eq('shopify_product_id', shopifyProductId)
+        .single();
+
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
       const { data, error } = await supabaseAdmin
         .from('product_recommendations')
         .select(`
@@ -16,7 +27,7 @@ export default async function handler(req, res) {
             shopify_product_id
           )
         `)
-        .eq('product_id', id)
+        .eq('product_id', product.id)
         .order('display_order', { ascending: true });
 
       if (error) throw error;
@@ -30,17 +41,34 @@ export default async function handler(req, res) {
     try {
       const { recommendedProductIds } = req.body;
 
+      // Get internal product ID from shopify_product_id
+      const { data: product } = await supabaseAdmin
+        .from('products')
+        .select('id')
+        .eq('shopify_product_id', shopifyProductId)
+        .single();
+
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Get internal IDs for recommended products
+      const { data: recommendedProducts } = await supabaseAdmin
+        .from('products')
+        .select('id, shopify_product_id')
+        .in('shopify_product_id', recommendedProductIds);
+
       // Delete existing recommendations
       await supabaseAdmin
         .from('product_recommendations')
         .delete()
-        .eq('product_id', id);
+        .eq('product_id', product.id);
 
       // Insert new recommendations
-      if (recommendedProductIds && recommendedProductIds.length > 0) {
-        const inserts = recommendedProductIds.map((recId, index) => ({
-          product_id: id,
-          recommended_product_id: recId,
+      if (recommendedProducts && recommendedProducts.length > 0) {
+        const inserts = recommendedProducts.map((recProd, index) => ({
+          product_id: product.id,
+          recommended_product_id: recProd.id,
           display_order: index
         }));
 
