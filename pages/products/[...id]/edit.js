@@ -12,10 +12,8 @@ export default function ProductEdit() {
   // Handle catch-all route - id will be an array
   const id = idParam && Array.isArray(idParam) ? idParam.join('/') : idParam;
 
-  // For API calls, encode each segment to preserve slashes
-  const encodedIdForApi = idParam && Array.isArray(idParam)
-    ? idParam.map(segment => encodeURIComponent(segment)).join('/')
-    : (id ? encodeURIComponent(id) : null);
+  // For API calls, fully encode the ID as a single segment
+  const encodedIdForApi = id ? encodeURIComponent(id) : null;
 
   console.log('Router idParam:', idParam);
   console.log('Reconstructed id:', id);

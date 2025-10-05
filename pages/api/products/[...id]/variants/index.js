@@ -4,7 +4,11 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   // Handle catch-all route - id will be an array
-  const shopifyProductId = Array.isArray(id) ? id.join('/') : id;
+  // If single element, it's fully encoded - decode it
+  // If multiple elements, join them (backward compatibility)
+  const shopifyProductId = Array.isArray(id)
+    ? (id.length === 1 ? decodeURIComponent(id[0]) : id.join('/'))
+    : id;
 
   if (req.method === 'GET') {
     try {

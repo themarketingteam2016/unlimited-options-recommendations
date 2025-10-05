@@ -32,9 +32,12 @@ function generateCombinations(attributes) {
 export default async function handler(req, res) {
   const { id } = req.query;
 
-  // Handle catch-all route - id will be an array like ['gid:', '', 'shopify', 'Product', '123']
-  // Join with '/' to reconstruct: 'gid://shopify/Product/123'
-  const shopifyProductId = Array.isArray(id) ? id.join('/') : id;
+  // Handle catch-all route - id will be an array
+  // If single element, it's fully encoded - decode it
+  // If multiple elements, join them (backward compatibility)
+  const shopifyProductId = Array.isArray(id)
+    ? (id.length === 1 ? decodeURIComponent(id[0]) : id.join('/'))
+    : id;
 
   console.log('Received id array:', id);
   console.log('Reconstructed shopifyProductId:', shopifyProductId);
