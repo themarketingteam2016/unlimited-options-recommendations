@@ -1,0 +1,162 @@
+.container {
+  min-height: 100vh;
+  background: #f6f6f7;
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.productSection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.imageSection {
+  position: sticky;
+  top: 20px;
+  height: fit-content;
+}
+
+.mainImage {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.infoSection h1 {
+  font-size: 32px;
+  color: #202223;
+  margin-bottom: 20px;
+}
+
+.optionsSection {
+  margin: 30px 0;
+}
+
+.optionGroup {
+  margin-bottom: 25px;
+}
+
+.optionGroup label {
+  display: block;
+  font-weight: 600;
+  color: #202223;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.primaryBadge {
+  display: inline-block;
+  background: #008060;
+  color: white;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.optionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.optionButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 2px solid #e3e5e7;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #202223;
+  transition: all 0.2s;
+}
+
+.optionButton:hover {
+  border-color: #008060;
+}
+
+.optionButton.selected {
+  border-color: #008060;
+  background: #d1f0e5;
+  color: #008060;
+}
+
+.optionImg {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.priceSection {
+  margin: 30px 0;
+  padding: 20px;
+  background: #f6f6f7;
+  border-radius: 6px;
+}
+
+.price {
+  font-size: 28px;
+  font-weight: 700;
+  color: #008060;
+  margin-bottom: 8px;
+}
+
+.stock {
+  font-size: 14px;
+  color: #6d7175;
+}
+
+.addToCartButton {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  background: #008060;
+  color: white;
+  transition: background 0.2s;
+}
+
+.addToCartButton:hover:not(:disabled) {
+  background: #006e52;
+}
+
+.addToCartButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6d7175;
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .productSection {
+    grid-template-columns: 1fr;
+  }
+
+  .imageSection {
+    position: relative;
+  }
+}

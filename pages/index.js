@@ -182,6 +182,11 @@ export default function Home() {
           </div>
         )}
 
+        <div className={styles.tabs}>
+          <Link href="/" className={`${styles.tab} ${styles.active}`}>Products</Link>
+          <Link href="/attributes" className={styles.tab}>Attributes</Link>
+        </div>
+
         {!selectedProduct ? (
           <>
             <h2>Select a Product</h2>
@@ -190,13 +195,15 @@ export default function Home() {
                 <div
                   key={product.id}
                   className={styles.productCard}
-                  onClick={() => selectProduct(product)}
                 >
                   {product.featuredImage && (
                     <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
                   )}
                   <h3>{product.title}</h3>
                   <p className={styles.productStatus}>{product.status}</p>
+                  <Link href={`/products/${product.id}/edit`} className={styles.editButton}>
+                    Edit Variants
+                  </Link>
                 </div>
               ))}
             </div>

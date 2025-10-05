@@ -1,0 +1,163 @@
+.bundleCart {
+  margin-top: 40px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bundleCart h3 {
+  font-size: 20px;
+  color: #202223;
+  margin-bottom: 20px;
+}
+
+.recommendations {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.recommendedProduct {
+  border: 1px solid #e3e5e7;
+  border-radius: 6px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.recommendedProduct:hover {
+  border-color: #008060;
+  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.1);
+}
+
+.productImage {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.recommendedProduct h4 {
+  font-size: 16px;
+  color: #202223;
+  margin: 10px 0;
+}
+
+.selected {
+  display: inline-block;
+  background: #d1f0e5;
+  color: #008060;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bulkAddButton {
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  background: #008060;
+  color: white;
+  transition: background 0.2s;
+}
+
+.bulkAddButton:hover {
+  background: #006e52;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modalContent h3 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #202223;
+}
+
+.variantsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.variantOption {
+  border: 1px solid #e3e5e7;
+  border-radius: 6px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.variantOption:hover {
+  border-color: #008060;
+  background: #f6f6f7;
+}
+
+.optionTag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.optionImg {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.price {
+  font-size: 16px;
+  font-weight: 600;
+  color: #008060;
+  margin-top: 8px;
+}
+
+.cancelButton {
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  background: #f1f2f4;
+  color: #202223;
+  transition: background 0.2s;
+}
+
+.cancelButton:hover {
+  background: #e3e5e7;
+}
