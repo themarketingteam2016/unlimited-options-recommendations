@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import Sidebar from '../../../components/Sidebar';
 import styles from '../../../styles/ProductEdit.module.css';
 
 export default function ProductEdit() {
@@ -190,13 +191,7 @@ export default function ProductEdit() {
         <title>Edit Product - {product.title}</title>
       </Head>
 
-      <div className={styles.sidebar}>
-        <h2>Menu</h2>
-        <nav>
-          <Link href="/" className={styles.navLink}>Products</Link>
-          <Link href="/attributes" className={styles.navLink}>Attributes</Link>
-        </nav>
-      </div>
+      <Sidebar />
 
       <main className={styles.main}>
         <div className={styles.header}>

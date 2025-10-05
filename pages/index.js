@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import Sidebar from '../components/Sidebar';
 import styles from '../styles/Home.module.css';
 
 export default function Home() {
@@ -173,6 +174,8 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
+      <Sidebar />
+
       <main className={styles.main}>
         <h1 className={styles.title}>Unlimited Product Options</h1>
         <p className={styles.description}>Create unlimited variants beyond Shopify's 100 variant limit</p>
@@ -182,11 +185,6 @@ export default function Home() {
             {message.text}
           </div>
         )}
-
-        <div className={styles.tabs}>
-          <Link href="/" className={`${styles.tab} ${styles.active}`}>Products</Link>
-          <Link href="/attributes" className={styles.tab}>Attributes</Link>
-        </div>
 
         {!selectedProduct ? (
           <>

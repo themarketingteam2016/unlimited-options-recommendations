@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
+import Sidebar from '../components/Sidebar';
 import styles from '../styles/Attributes.module.css';
 
 export default function Attributes() {
@@ -11,6 +11,7 @@ export default function Attributes() {
   const [formData, setFormData] = useState({ name: '', isPrimary: false });
   const [expandedAttribute, setExpandedAttribute] = useState(null);
   const [newValue, setNewValue] = useState({ value: '', imageUrl: '' });
+  const [editingValue, setEditingValue] = useState(null);
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
@@ -73,6 +74,23 @@ export default function Attributes() {
     }
   };
 
+  const handleImageUpload = async (e, isEdit = false) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+
+      if (isEdit && editingValue) {
+        setEditingValue({ ...editingValue, imageUrl: base64 });
+      } else {
+        setNewValue({ ...newValue, imageUrl: base64 });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddValue = async (attributeId) => {
     if (!newValue.value) return;
 
@@ -94,6 +112,48 @@ export default function Attributes() {
     }
   };
 
+  const handleUpdateValue = async () => {
+    if (!editingValue) return;
+
+    try {
+      const res = await fetch(`/api/attributes/values/${editingValue.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          value: editingValue.value,
+          imageUrl: editingValue.image_url
+        })
+      });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Value updated successfully!' });
+        setEditingValue(null);
+        fetchAttributes();
+        setTimeout(() => setMessage(null), 3000);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update value' });
+    }
+  };
+
+  const handleDeleteValue = async (valueId) => {
+    if (!confirm('Delete this value?')) return;
+
+    try {
+      const res = await fetch(`/api/attributes/values/${valueId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Value deleted successfully!' });
+        fetchAttributes();
+        setTimeout(() => setMessage(null), 3000);
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete value' });
+    }
+  };
+
   const editAttribute = (attr) => {
     setEditingAttribute(attr);
     setFormData({ name: attr.name, isPrimary: attr.is_primary });
@@ -110,13 +170,7 @@ export default function Attributes() {
         <title>Attributes - Unlimited Options</title>
       </Head>
 
-      <div className={styles.sidebar}>
-        <h2>Menu</h2>
-        <nav>
-          <Link href="/" className={styles.navLink}>Products</Link>
-          <Link href="/attributes" className={`${styles.navLink} ${styles.active}`}>Attributes</Link>
-        </nav>
-      </div>
+      <Sidebar />
 
       <main className={styles.main}>
         <div className={styles.header}>
@@ -198,19 +252,41 @@ export default function Attributes() {
                         onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
                       />
                       <input
-                        type="text"
-                        placeholder="Image URL (optional)"
-                        value={newValue.imageUrl}
-                        onChange={(e) => setNewValue({ ...newValue, imageUrl: e.target.value })}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, false)}
                       />
+                      {newValue.imageUrl && <img src={newValue.imageUrl} alt="Preview" className={styles.previewImg} />}
                       <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
                     </div>
 
                     <div className={styles.valuesList}>
                       {attr.attribute_values?.map(val => (
                         <div key={val.id} className={styles.valueItem}>
-                          {val.image_url && <img src={val.image_url} alt={val.value} className={styles.valueImage} />}
-                          <span>{val.value}</span>
+                          {editingValue?.id === val.id ? (
+                            <>
+                              <input
+                                type="text"
+                                value={editingValue.value}
+                                onChange={(e) => setEditingValue({ ...editingValue, value: e.target.value })}
+                              />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(e, true)}
+                              />
+                              {editingValue.image_url && <img src={editingValue.image_url} alt="" className={styles.valueImage} />}
+                              <button onClick={handleUpdateValue} className={styles.btnPrimary}>Save</button>
+                              <button onClick={() => setEditingValue(null)} className={styles.btnSecondary}>Cancel</button>
+                            </>
+                          ) : (
+                            <>
+                              {val.image_url && <img src={val.image_url} alt={val.value} className={styles.valueImage} />}
+                              <span>{val.value}</span>
+                              <button onClick={() => setEditingValue(val)} className={styles.btnEdit}>Edit</button>
+                              <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDelete}>×</button>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>

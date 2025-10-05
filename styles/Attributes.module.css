@@ -229,11 +229,49 @@
   border: 1px solid #c9cccf;
 }
 
+.valueItem input[type="text"] {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #c9cccf;
+  border-radius: 4px;
+}
+
+.valueItem input[type="file"] {
+  font-size: 12px;
+}
+
 .valueImage {
   width: 30px;
   height: 30px;
   object-fit: cover;
   border-radius: 4px;
+}
+
+.previewImg {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.btnEdit {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: #008060;
+  color: white;
+}
+
+.btnDelete {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  background: #d72c0d;
+  color: white;
 }
 
 .emptyState {
