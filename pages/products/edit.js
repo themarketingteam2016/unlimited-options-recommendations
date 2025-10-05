@@ -29,6 +29,8 @@ export default function ProductEdit() {
   const [variantImages, setVariantImages] = useState({});
   const [editingOptions, setEditingOptions] = useState({});
   const [attributeValueImages, setAttributeValueImages] = useState({});
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (productId) {
@@ -123,10 +125,12 @@ export default function ProductEdit() {
 
   const handleAddManualVariant = async () => {
     try {
+      setIsSaving(true);
       const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
 
       if (selectedAttrs.length === 0) {
         setMessage({ type: 'error', text: 'Please select at least one attribute first' });
+        setIsSaving(false);
         return;
       }
 
@@ -134,6 +138,7 @@ export default function ProductEdit() {
       const missingAttrs = selectedAttrs.filter(attrId => !manualVariant[attrId]);
       if (missingAttrs.length > 0) {
         setMessage({ type: 'error', text: 'Please select a value for all attributes' });
+        setIsSaving(false);
         return;
       }
 
@@ -174,15 +179,36 @@ export default function ProductEdit() {
       console.error('Add manual variant error:', error);
       setMessage({ type: 'error', text: `Failed to add variant: ${error.message}` });
       setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGenerateClick = () => {
+    const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
+
+    if (selectedAttrs.length === 0) {
+      setMessage({ type: 'error', text: 'Please select at least one attribute' });
+      return;
+    }
+
+    // If no existing variants, generate directly without modal
+    if (variants.length === 0) {
+      handleGenerateVariants('scratch');
+    } else {
+      // Show modal to choose mode
+      setShowGenerateModal(true);
     }
   };
 
   const handleGenerateVariants = async (mode) => {
     try {
+      setIsGenerating(true);
       const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
 
       if (selectedAttrs.length === 0) {
         setMessage({ type: 'error', text: 'Please select at least one attribute' });
+        setIsGenerating(false);
         return;
       }
 
@@ -221,6 +247,8 @@ export default function ProductEdit() {
       console.error('Generate variants error:', error);
       setMessage({ type: 'error', text: `Failed to generate variants: ${error.message}` });
       setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -455,6 +483,7 @@ export default function ProductEdit() {
 
   const handleSaveRecommendations = async () => {
     try {
+      setIsSaving(true);
       console.log('Saving recommendations:', selectedRecommendations);
       console.log('Product ID:', productId);
 
@@ -479,6 +508,8 @@ export default function ProductEdit() {
       console.error('Save error:', error);
       setMessage({ type: 'error', text: `Failed to save recommendations: ${error.message}` });
       setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -573,7 +604,7 @@ export default function ProductEdit() {
                   {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                 </label>
 
-                {selectedAttributes[attr.id] && attr.attribute_values?.length > 0 && (
+                {attr.attribute_values?.length > 0 && (
                   <div className={styles.valuesGrid}>
                     {attr.attribute_values.map(val => (
                       <div key={val.id} className={styles.valueItemWithImage}>
@@ -621,13 +652,59 @@ export default function ProductEdit() {
             ))}
           </div>
 
+          {/* Selected Values Summary */}
+          {Object.keys(selectedValues).some(attrId => selectedValues[attrId]?.length > 0) && (
+            <div style={{
+              marginTop: '20px',
+              padding: '15px',
+              background: '#f6faf9',
+              border: '1px solid #008060',
+              borderRadius: '8px'
+            }}>
+              <h3 style={{ fontSize: '14px', marginBottom: '10px', color: '#202223' }}>
+                Selected for Generation:
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                {Object.keys(selectedValues).map(attrId => {
+                  if (!selectedValues[attrId] || selectedValues[attrId].length === 0) return null;
+                  const attr = attributes.find(a => a.id === attrId);
+                  if (!attr) return null;
+
+                  return (
+                    <div key={attrId} style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '13px', color: '#008060' }}>{attr.name}:</strong>
+                      {selectedValues[attrId].map(valId => {
+                        const val = attr.attribute_values?.find(v => v.id === valId);
+                        return val ? (
+                          <span
+                            key={valId}
+                            style={{
+                              background: '#008060',
+                              color: 'white',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                          >
+                            {val.value}
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
             <button
               className={styles.btnPrimary}
-              onClick={() => setShowGenerateModal(true)}
-              disabled={Object.values(selectedAttributes).every(v => !v)}
+              onClick={handleGenerateClick}
+              disabled={Object.values(selectedAttributes).every(v => !v) || isGenerating}
             >
-              Generate Variations from Selected
+              {isGenerating ? 'Generating...' : 'Generate Variations from Selected'}
             </button>
           </div>
         </div>
@@ -878,8 +955,9 @@ export default function ProductEdit() {
                     onClick={handleAddManualVariant}
                     className={styles.btnPrimary}
                     style={{ marginTop: '15px' }}
+                    disabled={isSaving}
                   >
-                    Add Variation
+                    {isSaving ? 'Adding...' : 'Add Variation'}
                   </button>
                 </div>
               </div>
@@ -910,8 +988,12 @@ export default function ProductEdit() {
             ))}
           </div>
 
-          <button className={styles.btnPrimary} onClick={handleSaveRecommendations}>
-            Save Recommendations
+          <button
+            className={styles.btnPrimary}
+            onClick={handleSaveRecommendations}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Recommendations'}
           </button>
         </div>
       </main>
