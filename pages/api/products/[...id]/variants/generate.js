@@ -30,7 +30,14 @@ function generateCombinations(attributes) {
 }
 
 export default async function handler(req, res) {
-  const { id: shopifyProductId } = req.query;
+  const { id } = req.query;
+
+  // Handle catch-all route - id will be an array like ['gid:', '', 'shopify', 'Product', '123']
+  // Join with '/' to reconstruct: 'gid://shopify/Product/123'
+  const shopifyProductId = Array.isArray(id) ? id.join('/') : id;
+
+  console.log('Received id array:', id);
+  console.log('Reconstructed shopifyProductId:', shopifyProductId);
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

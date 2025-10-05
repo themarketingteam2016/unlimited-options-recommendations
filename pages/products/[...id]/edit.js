@@ -7,8 +7,11 @@ import styles from '../../../styles/ProductEdit.module.css';
 
 export default function ProductEdit() {
   const router = useRouter();
-  const { id: encodedId } = router.query;
-  const id = encodedId ? decodeURIComponent(encodedId) : null;
+  const { id: idParam } = router.query;
+
+  // Handle catch-all route - id will be an array
+  const id = idParam && Array.isArray(idParam) ? idParam.join('/') : idParam;
+  const encodedId = id ? encodeURIComponent(id) : null;
 
   const [product, setProduct] = useState(null);
   const [attributes, setAttributes] = useState([]);

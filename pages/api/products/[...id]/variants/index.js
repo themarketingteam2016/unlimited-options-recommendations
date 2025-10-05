@@ -1,7 +1,10 @@
 import { supabaseAdmin } from '../../../../../lib/supabase';
 
 export default async function handler(req, res) {
-  const { id: shopifyProductId } = req.query;
+  const { id } = req.query;
+
+  // Handle catch-all route - id will be an array
+  const shopifyProductId = Array.isArray(id) ? id.join('/') : id;
 
   if (req.method === 'GET') {
     try {
