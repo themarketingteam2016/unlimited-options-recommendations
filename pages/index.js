@@ -20,7 +20,7 @@ export default function Home() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch('/api/products?v=2');
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
       setLoading(false);
