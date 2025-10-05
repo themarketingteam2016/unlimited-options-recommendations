@@ -45,12 +45,18 @@ export default async function handler(req, res) {
     try {
       const { recommendedProductIds } = req.body;
 
+      console.log('POST /api/recommendations');
+      console.log('shopifyProductId:', shopifyProductId);
+      console.log('recommendedProductIds:', recommendedProductIds);
+
       // Get internal product ID from shopify_product_id
       const { data: product } = await supabaseAdmin
         .from('products')
         .select('id')
         .eq('shopify_product_id', shopifyProductId)
         .single();
+
+      console.log('Found product:', product);
 
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
@@ -62,11 +68,17 @@ export default async function handler(req, res) {
         .select('id, shopify_product_id')
         .in('shopify_product_id', recommendedProductIds);
 
+      console.log('Found recommended products:', recommendedProducts);
+
       // Delete existing recommendations
-      await supabaseAdmin
+      const { error: deleteError } = await supabaseAdmin
         .from('product_recommendations')
         .delete()
         .eq('product_id', product.id);
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+      }
 
       // Insert new recommendations
       if (recommendedProducts && recommendedProducts.length > 0) {
@@ -76,14 +88,23 @@ export default async function handler(req, res) {
           display_order: index
         }));
 
+        console.log('Inserting recommendations:', inserts);
+
         const { error } = await supabaseAdmin
           .from('product_recommendations')
           .insert(inserts);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+
+        console.log('Recommendations saved successfully');
+      } else {
+        console.log('No recommendations to insert (array empty or none found)');
       }
 
-      res.status(200).json({ success: true });
+      res.status(200).json({ success: true, count: recommendedProducts?.length || 0 });
     } catch (error) {
       console.error('Failed to update recommendations:', error);
       res.status(500).json({ error: error.message });

@@ -197,18 +197,30 @@ export default function ProductEdit() {
 
   const handleSaveRecommendations = async () => {
     try {
+      console.log('Saving recommendations:', selectedRecommendations);
+      console.log('Product ID:', productId);
+
       const res = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
       });
 
+      console.log('Response status:', res.status);
+      const data = await res.json();
+      console.log('Response data:', data);
+
       if (res.ok) {
         setMessage({ type: 'success', text: 'Recommendations saved successfully!' });
         setTimeout(() => setMessage(null), 3000);
+      } else {
+        setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
+        setTimeout(() => setMessage(null), 5000);
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to save recommendations' });
+      console.error('Save error:', error);
+      setMessage({ type: 'error', text: `Failed to save recommendations: ${error.message}` });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
