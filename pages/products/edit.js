@@ -41,6 +41,7 @@ export default function ProductEdit() {
       // Fetch all attributes
       const attrsRes = await fetch('/api/attributes');
       const attrsData = await attrsRes.json();
+      console.log('Fetched attributes:', attrsData);
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
 
       // Fetch all products
@@ -83,6 +84,7 @@ export default function ProductEdit() {
     try {
       const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`);
       const data = await res.json();
+      console.log('Fetched variants:', data);
       setVariants(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching variants:', error);
@@ -735,15 +737,27 @@ export default function ProductEdit() {
                     </td>
                     <td>
                       {variant.variant_options?.map(opt => {
-                        const attr = attributes.find(a => a.id === opt.attribute_id);
-                        console.log('Variant option:', opt);
-                        console.log('Found attribute:', attr);
-                        console.log('Attribute values:', attr?.attribute_values);
+                        // Find attribute by converting IDs to strings for comparison
+                        const attr = attributes.find(a => String(a.id) === String(opt.attribute_id));
 
-                        if (!attr || !attr.attribute_values) {
+                        console.log('Processing option:', {
+                          optionId: opt.id,
+                          attributeId: opt.attribute_id,
+                          attributeName: opt.attribute.name,
+                          currentValue: opt.attribute_value.value,
+                          foundAttr: attr,
+                          availableValues: attr?.attribute_values
+                        });
+
+                        // Fallback if attribute or values not found
+                        if (!attr || !attr.attribute_values || attr.attribute_values.length === 0) {
+                          console.warn('No attribute values found for:', opt.attribute.name);
                           return (
-                            <div key={opt.id} style={{ marginBottom: '8px' }}>
+                            <div key={opt.id} style={{ marginBottom: '8px', padding: '6px', background: '#fff3cd', borderRadius: '4px' }}>
                               <strong>{opt.attribute.name}:</strong> {opt.attribute_value.value}
+                              <span style={{ fontSize: '11px', color: '#856404', marginLeft: '8px' }}>
+                                (values not loaded)
+                              </span>
                             </div>
                           );
                         }
