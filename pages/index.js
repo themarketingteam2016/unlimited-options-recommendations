@@ -22,6 +22,9 @@ export default function Home() {
     try {
       const res = await fetch('/api/products');
       const data = await res.json();
+      console.log('Fetched products:', data);
+      console.log('Is array?', Array.isArray(data));
+      console.log('Products count:', data.length);
       setProducts(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
@@ -189,23 +192,29 @@ export default function Home() {
         {!selectedProduct ? (
           <>
             <h2>Select a Product</h2>
-            <div className={styles.productGrid}>
-              {products.map(product => (
-                <div
-                  key={product.id}
-                  className={styles.productCard}
-                >
-                  {product.featuredImage && (
-                    <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
-                  )}
-                  <h3>{product.title}</h3>
-                  <p className={styles.productStatus}>{product.status}</p>
-                  <Link href={`/products/${encodeURIComponent(product.id)}/edit`} className={styles.editButton}>
-                    Edit Variants
-                  </Link>
-                </div>
-              ))}
-            </div>
+            {products.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p>No products found. Make sure your Shopify store has products.</p>
+              </div>
+            ) : (
+              <div className={styles.productGrid}>
+                {products.map(product => (
+                  <div
+                    key={product.id}
+                    className={styles.productCard}
+                  >
+                    {product.featuredImage && (
+                      <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
+                    )}
+                    <h3>{product.title}</h3>
+                    <p className={styles.productStatus}>{product.status}</p>
+                    <Link href={`/products/${encodeURIComponent(product.id)}/edit`} className={styles.editButton}>
+                      Edit Variants
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <>

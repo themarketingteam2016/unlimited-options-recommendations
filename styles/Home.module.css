@@ -284,3 +284,12 @@
   align-items: center;
   margin-bottom: 20px;
 }
+
+.emptyState {
+  text-align: center;
+  padding: 40px 20px;
+  background: #f6f6f7;
+  border-radius: 8px;
+  color: #6d7175;
+  margin: 20px 0;
+}
