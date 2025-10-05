@@ -11,7 +11,9 @@ export default function ProductEdit() {
 
   // Handle catch-all route - id will be an array
   const id = idParam && Array.isArray(idParam) ? idParam.join('/') : idParam;
-  const encodedId = id ? encodeURIComponent(id) : null;
+
+  console.log('Router idParam:', idParam);
+  console.log('Reconstructed id:', id);
 
   const [product, setProduct] = useState(null);
   const [attributes, setAttributes] = useState([]);
@@ -49,7 +51,7 @@ export default function ProductEdit() {
       setProduct(foundProduct);
 
       // Fetch existing recommendations
-      const recsRes = await fetch(`/api/products/${encodedId}/recommendations`);
+      const recsRes = await fetch(`/api/products/${id}/recommendations`);
       const recsData = await recsRes.json();
       setSelectedRecommendations(
         Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
@@ -67,7 +69,7 @@ export default function ProductEdit() {
 
   const fetchVariants = async () => {
     try {
-      const res = await fetch(`/api/products/${encodedId}/variants`);
+      const res = await fetch(`/api/products/${id}/variants`);
       const data = await res.json();
       setVariants(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -100,7 +102,7 @@ export default function ProductEdit() {
         return;
       }
 
-      const res = await fetch(`/api/products/${encodedId}/variants/generate`, {
+      const res = await fetch(`/api/products/${id}/variants/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,7 +136,7 @@ export default function ProductEdit() {
 
     try {
       if (bulkAction === 'delete') {
-        const res = await fetch(`/api/products/${encodedId}/variants`, {
+        const res = await fetch(`/api/products/${id}/variants`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variantIds: selectedVariants })
@@ -154,7 +156,7 @@ export default function ProductEdit() {
             ...(bulkAction === 'stock' ? { stock_quantity: parseInt(bulkValue) } : {})
           }));
 
-        const res = await fetch(`/api/products/${encodedId}/variants`, {
+        const res = await fetch(`/api/products/${id}/variants`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variants: updatedVariants })
@@ -181,7 +183,7 @@ export default function ProductEdit() {
     updatedVariant[field] = value;
 
     try {
-      await fetch(`/api/products/${encodedId}/variants`, {
+      await fetch(`/api/products/${id}/variants`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ variants: [updatedVariant] })
@@ -201,7 +203,7 @@ export default function ProductEdit() {
 
   const handleSaveRecommendations = async () => {
     try {
-      const res = await fetch(`/api/products/${encodedId}/recommendations`, {
+      const res = await fetch(`/api/products/${id}/recommendations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
