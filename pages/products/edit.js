@@ -76,7 +76,7 @@ export default function ProductEdit() {
       );
 
       // Fetch variants
-      await fetchVariants();
+      const variantsData = await fetchVariants();
 
       // Fetch attribute value images for this product
       const imagesRes = await fetch(`/api/attribute-images?productId=${encodeURIComponent(productId)}`);
@@ -87,6 +87,39 @@ export default function ProductEdit() {
           imageMap[img.attribute_value_id] = img.image_url;
         });
         setAttributeValueImages(imageMap);
+      }
+
+      // Restore previously selected attributes and values from existing variants
+      if (variantsData && variantsData.length > 0) {
+        const usedAttributeIds = new Set();
+        const usedValuesByAttribute = {};
+
+        variantsData.forEach(variant => {
+          variant.variant_options?.forEach(opt => {
+            usedAttributeIds.add(opt.attribute_id);
+
+            if (!usedValuesByAttribute[opt.attribute_id]) {
+              usedValuesByAttribute[opt.attribute_id] = new Set();
+            }
+            usedValuesByAttribute[opt.attribute_id].add(opt.attribute_value_id);
+          });
+        });
+
+        // Set selected attributes
+        const selectedAttrs = {};
+        usedAttributeIds.forEach(attrId => {
+          selectedAttrs[attrId] = true;
+        });
+        setSelectedAttributes(selectedAttrs);
+
+        // Set selected values
+        const selectedVals = {};
+        Object.keys(usedValuesByAttribute).forEach(attrId => {
+          selectedVals[attrId] = Array.from(usedValuesByAttribute[attrId]);
+        });
+        setSelectedValues(selectedVals);
+
+        console.log('Restored selections:', { selectedAttrs, selectedVals });
       }
 
       setLoading(false);
@@ -101,9 +134,12 @@ export default function ProductEdit() {
       const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`);
       const data = await res.json();
       console.log('Fetched variants:', data);
-      setVariants(Array.isArray(data) ? data : []);
+      const variantsArray = Array.isArray(data) ? data : [];
+      setVariants(variantsArray);
+      return variantsArray;
     } catch (error) {
       console.error('Error fetching variants:', error);
+      return [];
     }
   };
 
