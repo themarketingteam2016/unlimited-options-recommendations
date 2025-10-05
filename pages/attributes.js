@@ -10,7 +10,7 @@ export default function Attributes() {
   const [editingAttribute, setEditingAttribute] = useState(null);
   const [formData, setFormData] = useState({ name: '', isPrimary: false });
   const [expandedAttribute, setExpandedAttribute] = useState(null);
-  const [newValue, setNewValue] = useState({ value: '', imageUrl: '' });
+  const [newValue, setNewValue] = useState({ value: '' });
   const [editingValue, setEditingValue] = useState(null);
   const [message, setMessage] = useState(null);
   const [bulkMode, setBulkMode] = useState({});
@@ -76,23 +76,6 @@ export default function Attributes() {
     }
   };
 
-  const handleImageUpload = async (e, isEdit = false) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result;
-
-      if (isEdit && editingValue) {
-        setEditingValue({ ...editingValue, imageUrl: base64 });
-      } else {
-        setNewValue({ ...newValue, imageUrl: base64 });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
   const handleAddValue = async (attributeId) => {
     if (!newValue.value) return;
 
@@ -100,12 +83,12 @@ export default function Attributes() {
       const res = await fetch(`/api/attributes/${attributeId}/values`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newValue)
+        body: JSON.stringify({ value: newValue.value })
       });
 
       if (res.ok) {
         setMessage({ type: 'success', text: 'Value added successfully!' });
-        setNewValue({ value: '', imageUrl: '' });
+        setNewValue({ value: '' });
         fetchAttributes();
         setTimeout(() => setMessage(null), 3000);
       }
@@ -131,7 +114,7 @@ export default function Attributes() {
         await fetch(`/api/attributes/${attributeId}/values`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value, imageUrl: '' })
+          body: JSON.stringify({ value })
         });
       }
 
@@ -304,14 +287,8 @@ export default function Attributes() {
                           type="text"
                           placeholder="Value name"
                           value={newValue.value}
-                          onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
+                          onChange={(e) => setNewValue({ value: e.target.value })}
                         />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(e, false)}
-                        />
-                        {newValue.imageUrl && <img src={newValue.imageUrl} alt="Preview" className={styles.previewImg} />}
                         <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
                       </div>
                     )}
@@ -331,7 +308,6 @@ export default function Attributes() {
                             </>
                           ) : (
                             <>
-                              {val.image_url && <img src={val.image_url} alt={val.value} className={styles.valueImage} />}
                               <span>{val.value}</span>
                               <button onClick={() => setEditingValue(val)} className={styles.btnEdit}>Edit</button>
                               <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDelete}>×</button>
