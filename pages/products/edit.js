@@ -227,13 +227,12 @@ export default function ProductEdit() {
           setSelectedVariants([]);
           await fetchVariants();
         }
-      } else if (bulkAction === 'price' || bulkAction === 'stock') {
+      } else if (bulkAction === 'price') {
         const updatedVariants = variants
           .filter(v => selectedVariants.includes(v.id))
           .map(v => ({
             ...v,
-            ...(bulkAction === 'price' ? { price: parseFloat(bulkValue) } : {}),
-            ...(bulkAction === 'stock' ? { stock_quantity: parseInt(bulkValue) } : {})
+            price: parseFloat(bulkValue)
           }));
 
         const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
@@ -651,10 +650,9 @@ export default function ProductEdit() {
                   <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
                     <option value="">Bulk Actions</option>
                     <option value="price">Set Price</option>
-                    <option value="stock">Set Stock</option>
                     <option value="delete">Delete</option>
                   </select>
-                  {(bulkAction === 'price' || bulkAction === 'stock') && (
+                  {bulkAction === 'price' && (
                     <input
                       type="number"
                       placeholder="Value"
@@ -673,20 +671,18 @@ export default function ProductEdit() {
               <table className={styles.variantsTable}>
               <thead>
                 <tr>
-                  <th>
+                  <th style={{ width: '40px' }}>
                     <input
                       type="checkbox"
                       checked={selectedVariants.length === variants.length}
                       onChange={e => setSelectedVariants(e.target.checked ? variants.map(v => v.id) : [])}
                     />
                   </th>
-                  <th>Image</th>
+                  <th style={{ width: '100px' }}>Image</th>
                   <th>Options</th>
-                  <th>Price</th>
-                  <th>SKU</th>
-                  <th>Stock</th>
-                  <th>Active</th>
-                  <th>Action</th>
+                  <th style={{ width: '100px' }}>Price</th>
+                  <th style={{ width: '120px' }}>SKU</th>
+                  <th style={{ width: '80px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -741,12 +737,20 @@ export default function ProductEdit() {
                       {variant.variant_options?.map(opt => {
                         const attr = attributes.find(a => a.id === opt.attribute_id);
                         return (
-                          <div key={opt.id} className={styles.optionTag}>
-                            <label style={{ fontSize: '11px', marginRight: '5px' }}>{opt.attribute.name}:</label>
+                          <div key={opt.id} style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', minWidth: '60px' }}>
+                              {opt.attribute.name}:
+                            </label>
                             <select
                               value={editingOptions[variant.id]?.[opt.attribute_id] || opt.attribute_value_id}
                               onChange={(e) => handleOptionChange(variant.id, opt.attribute_id, e.target.value)}
-                              style={{ fontSize: '12px', padding: '2px' }}
+                              style={{
+                                fontSize: '13px',
+                                padding: '6px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid #c9cccf',
+                                minWidth: '120px'
+                              }}
                             >
                               {attr?.attribute_values?.map(val => (
                                 <option key={val.id} value={val.id}>
@@ -764,6 +768,7 @@ export default function ProductEdit() {
                         step="0.01"
                         value={variant.price || ''}
                         onChange={e => handleVariantUpdate(variant.id, 'price', parseFloat(e.target.value))}
+                        style={{ width: '90px' }}
                       />
                     </td>
                     <td>
@@ -771,20 +776,7 @@ export default function ProductEdit() {
                         type="text"
                         value={variant.sku || ''}
                         onChange={e => handleVariantUpdate(variant.id, 'sku', e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={variant.stock_quantity || 0}
-                        onChange={e => handleVariantUpdate(variant.id, 'stock_quantity', parseInt(e.target.value))}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={variant.is_active}
-                        onChange={e => handleVariantUpdate(variant.id, 'is_active', e.target.checked)}
+                        style={{ width: '110px' }}
                       />
                     </td>
                     <td>
