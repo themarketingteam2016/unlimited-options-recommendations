@@ -270,10 +270,13 @@ export default function ProductEdit() {
   };
 
   const handleGenerateClick = () => {
-    const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
+    // Check for selected values instead of just attributes
+    const hasSelectedValues = Object.keys(selectedValues).some(
+      attrId => selectedValues[attrId] && selectedValues[attrId].length > 0
+    );
 
-    if (selectedAttrs.length === 0) {
-      setMessage({ type: 'error', text: 'Please select at least one attribute' });
+    if (!hasSelectedValues) {
+      setMessage({ type: 'error', text: 'Please select at least one attribute value' });
       return;
     }
 
@@ -289,10 +292,17 @@ export default function ProductEdit() {
   const handleGenerateVariants = async (mode) => {
     try {
       setIsGenerating(true);
-      const selectedAttrs = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]);
 
-      if (selectedAttrs.length === 0) {
-        setMessage({ type: 'error', text: 'Please select at least one attribute' });
+      // Filter selectedValues to only include attributes with values
+      const filteredValues = Object.keys(selectedValues).reduce((acc, key) => {
+        if (selectedValues[key] && selectedValues[key].length > 0) {
+          acc[key] = selectedValues[key];
+        }
+        return acc;
+      }, {});
+
+      if (Object.keys(filteredValues).length === 0) {
+        setMessage({ type: 'error', text: 'Please select at least one attribute value' });
         setIsGenerating(false);
         return;
       }
@@ -300,18 +310,14 @@ export default function ProductEdit() {
       console.log('Generating variants with mode:', mode);
       console.log('Selected attributes:', selectedAttributes);
       console.log('Selected values:', selectedValues);
+      console.log('Filtered values for generation:', filteredValues);
 
       const res = await fetch(`/api/variants/generate?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode,
-          selectedValues: Object.keys(selectedValues).reduce((acc, key) => {
-            if (selectedAttributes[key]) {
-              acc[key] = selectedValues[key];
-            }
-            return acc;
-          }, {})
+          selectedValues: filteredValues
         })
       });
 
