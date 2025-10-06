@@ -9,36 +9,38 @@
 
 <script>
   (function() {
-    const productId = '{{ product.id }}';
-    const apiUrl = '{{ shop.url }}';
+    const productId = 'gid://shopify/Product/{{ product.id }}';
+    const apiUrl = 'https://unlimtited-options-recommendations.vercel.app';
     const blockId = '{{ block.id }}';
 
     // Create container for the customizer
     const container = document.getElementById('unlimited-options-customizer-' + blockId);
     const root = container.querySelector('#customizer-app-root');
 
+    // Show loading state
+    root.innerHTML = '<div style="text-align:center;padding:40px;">Loading customizer...</div>';
+
     // Load the customizer widget
     async function loadCustomizer() {
       try {
-        // Fetch product data
-        const productsRes = await fetch('/apps/unlimited-options/api/products');
-        const products = await productsRes.json();
-        const product = products.find(p => p.id === productId);
+        console.log('Loading customizer for product:', productId);
 
-        if (!product) {
-          console.error('Product not found for customizer');
+        // Fetch variants directly
+        const variantsRes = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/variants`);
+        const variants = await variantsRes.json();
+
+        console.log('Fetched variants:', variants);
+
+        if (!variants || variants.length === 0) {
+          root.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">No custom options available for this product.</div>';
           return;
         }
-
-        // Fetch variants
-        const variantsRes = await fetch(`/apps/unlimited-options/api/products/${encodeURIComponent(productId)}/variants`);
-        const variants = await variantsRes.json();
 
         // Extract attributes
         const attributes = extractAttributes(variants);
 
         // Render customizer UI
-        renderCustomizer(product, variants, attributes);
+        renderCustomizer(variants, attributes);
 
       } catch (error) {
         console.error('Error loading customizer:', error);
@@ -67,7 +69,7 @@
       return Object.values(uniqueAttrs);
     }
 
-    function renderCustomizer(product, variants, attributes) {
+    function renderCustomizer(variants, attributes) {
       let selectedOptions = {};
       let selectedVariant = null;
       let quantity = 1;
