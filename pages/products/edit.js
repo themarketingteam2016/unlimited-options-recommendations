@@ -904,6 +904,7 @@ export default function ProductEdit() {
                   <th style={{ width: '100px' }}>Image</th>
                   <th>Options</th>
                   <th style={{ width: '100px' }}>Price</th>
+                  <th style={{ width: '100px' }}>Stock</th>
                   <th style={{ width: '120px' }}>SKU</th>
                   <th style={{ width: '80px' }}>Action</th>
                 </tr>
@@ -1022,6 +1023,15 @@ export default function ProductEdit() {
                         value={variant.price || ''}
                         onChange={e => handleVariantUpdate(variant.id, 'price', parseFloat(e.target.value))}
                         style={{ width: '90px' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={variant.stock_quantity || 0}
+                        onChange={e => handleVariantUpdate(variant.id, 'stock_quantity', parseInt(e.target.value) || 0)}
+                        style={{ width: '90px' }}
+                        min="0"
                       />
                     </td>
                     <td>
