@@ -111,12 +111,23 @@ export default async function handler(req, res) {
     // Filter attributes based on selected values if provided
     let filteredAttributes = attributes;
     if (selectedValues && Object.keys(selectedValues).length > 0) {
-      filteredAttributes = attributes.map(attr => ({
-        ...attr,
-        attribute_values: attr.attribute_values.filter(val =>
+      console.log('Filtering attributes with selectedValues:', selectedValues);
+      filteredAttributes = attributes.map(attr => {
+        const filteredValues = attr.attribute_values.filter(val =>
           selectedValues[attr.id]?.includes(val.id)
-        )
-      })).filter(attr => attr.attribute_values.length > 0);
+        );
+        console.log(`Attribute ${attr.name} (${attr.id}): ${attr.attribute_values.length} values -> ${filteredValues.length} filtered`);
+        return {
+          ...attr,
+          attribute_values: filteredValues
+        };
+      }).filter(attr => attr.attribute_values.length > 0);
+
+      console.log('Filtered attributes count:', filteredAttributes.length);
+    }
+
+    if (filteredAttributes.length === 0) {
+      return res.status(400).json({ error: 'No attribute values selected. Please select at least one value for each attribute.' });
     }
 
     // Generate combinations
