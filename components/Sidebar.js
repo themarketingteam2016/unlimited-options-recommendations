@@ -7,7 +7,7 @@ export default function Sidebar() {
 
   const isActive = (path) => {
     if (path === '/') {
-      return router.pathname === '/';
+      return router.pathname === '/' || router.pathname.startsWith('/products');
     }
     return router.pathname.startsWith(path);
   };
@@ -18,7 +18,7 @@ export default function Sidebar() {
       <nav>
         <Link
           href="/"
-          className={`${styles.navLink} ${isActive('/') && !isActive('/products') && !isActive('/attributes') ? styles.active : ''}`}
+          className={`${styles.navLink} ${isActive('/') && !isActive('/attributes') ? styles.active : ''}`}
         >
           Products
         </Link>

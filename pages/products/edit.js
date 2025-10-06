@@ -31,6 +31,7 @@ export default function ProductEdit() {
   const [attributeValueImages, setAttributeValueImages] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('attributes');
 
   useEffect(() => {
     if (productId) {
@@ -94,22 +95,34 @@ export default function ProductEdit() {
         const usedAttributeIds = new Set();
         const usedValuesByAttribute = {};
 
+        console.log('=== RESTORING SELECTIONS ===');
+        console.log('Variants with options:', variantsData);
+
         variantsData.forEach(variant => {
           variant.variant_options?.forEach(opt => {
-            usedAttributeIds.add(opt.attribute_id);
+            // Ensure IDs are strings for consistent comparison
+            const attrId = String(opt.attribute_id);
+            const valueId = String(opt.attribute_value_id);
 
-            if (!usedValuesByAttribute[opt.attribute_id]) {
-              usedValuesByAttribute[opt.attribute_id] = new Set();
+            usedAttributeIds.add(attrId);
+
+            if (!usedValuesByAttribute[attrId]) {
+              usedValuesByAttribute[attrId] = new Set();
             }
-            usedValuesByAttribute[opt.attribute_id].add(opt.attribute_value_id);
+            usedValuesByAttribute[attrId].add(valueId);
           });
         });
+
+        console.log('Used attribute IDs:', Array.from(usedAttributeIds));
+        console.log('Used values by attribute:', usedValuesByAttribute);
 
         // Set selected attributes
         const selectedAttrs = {};
         usedAttributeIds.forEach(attrId => {
           selectedAttrs[attrId] = true;
         });
+
+        console.log('Setting selected attributes:', selectedAttrs);
         setSelectedAttributes(selectedAttrs);
 
         // Set selected values
@@ -117,9 +130,11 @@ export default function ProductEdit() {
         Object.keys(usedValuesByAttribute).forEach(attrId => {
           selectedVals[attrId] = Array.from(usedValuesByAttribute[attrId]);
         });
+
+        console.log('Setting selected values:', selectedVals);
         setSelectedValues(selectedVals);
 
-        console.log('Restored selections:', { selectedAttrs, selectedVals });
+        console.log('=========================');
       }
 
       setLoading(false);
@@ -599,61 +614,43 @@ export default function ProductEdit() {
           </div>
         )}
 
-        {/* Product Image */}
-        <div className={styles.section}>
-          <h2>Product Image</h2>
-          <p className={styles.subtitle}>Upload a custom image for this product</p>
-
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            {(productImage || product.image_url || product.featuredImage?.url) ? (
-              <img
-                src={productImage || product.image_url || product.featuredImage?.url}
-                alt={product.title}
-                style={{ width: '200px', height: '200px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e3e5e7' }}
-              />
-            ) : (
-              <div style={{
-                width: '200px',
-                height: '200px',
-                border: '2px dashed #c9cccf',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '48px',
-                color: '#c9cccf'
-              }}>
-                📷
-              </div>
-            )}
-            <div>
-              <label className={styles.uploadButton} style={{ padding: '10px 20px', fontSize: '14px' }}>
-                {(productImage || product.image_url) ? 'Change Product Image' : 'Upload Product Image'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={uploadingImage}
-                  style={{ display: 'none' }}
-                />
-              </label>
-              {uploadingImage && <p style={{ marginTop: '10px', fontSize: '14px', color: '#6d7175' }}>Uploading image...</p>}
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === 'attributes' ? styles.active : ''}`}
+            onClick={() => setActiveTab('attributes')}
+          >
+            Attributes & Values
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'variants' ? styles.active : ''}`}
+            onClick={() => setActiveTab('variants')}
+          >
+            Product Variations
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'recommendations' ? styles.active : ''}`}
+            onClick={() => setActiveTab('recommendations')}
+          >
+            Product Recommendations
+          </button>
         </div>
 
-        {/* Attributes Selection */}
+        {/* Attributes & Values Tab */}
+        <div className={`${styles.tabContent} ${activeTab === 'attributes' ? styles.active : ''}`}>
         <div className={styles.section}>
           <h2>Attributes & Values</h2>
           <p className={styles.subtitle}>Select attributes and their values to create product variations</p>
 
           <div className={styles.attributesGrid}>
-            {attributes.map(attr => (
+            {attributes.map(attr => {
+              const attrIdStr = String(attr.id);
+              return (
               <div key={attr.id} className={styles.attributeCard}>
                 <label className={styles.attributeLabel}>
                   <input
                     type="checkbox"
-                    checked={selectedAttributes[attr.id] || false}
+                    checked={selectedAttributes[attrIdStr] || false}
                     onChange={() => handleAttributeToggle(attr.id)}
                   />
                   <span style={{ fontSize: '15px' }}>{attr.name}</span>
@@ -663,7 +660,8 @@ export default function ProductEdit() {
                 {attr.attribute_values?.length > 0 && (
                   <div className={styles.valuesGrid}>
                     {attr.attribute_values.map(val => {
-                      const isSelected = selectedValues[attr.id]?.includes(val.id) || false;
+                      const valIdStr = String(val.id);
+                      const isSelected = selectedValues[attrIdStr]?.includes(valIdStr) || false;
                       return (
                         <div
                           key={val.id}
@@ -719,7 +717,8 @@ export default function ProductEdit() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Selected Values Summary */}
@@ -778,6 +777,8 @@ export default function ProductEdit() {
             </button>
           </div>
         </div>
+        </div>
+        {/* End Attributes & Values Tab */}
 
         {/* Generate Modal */}
         {showGenerateModal && (
@@ -803,7 +804,8 @@ export default function ProductEdit() {
           </div>
         )}
 
-        {/* Variants Section */}
+        {/* Product Variations Tab */}
+        <div className={`${styles.tabContent} ${activeTab === 'variants' ? styles.active : ''}`}>
         {(variants.length > 0 || Object.keys(selectedAttributes).filter(k => selectedAttributes[k]).length > 0) && (
           <div className={styles.section}>
             <div className={styles.variantsHeader}>
@@ -1035,8 +1037,11 @@ export default function ProductEdit() {
             )}
           </div>
         )}
+        </div>
+        {/* End Product Variations Tab */}
 
-        {/* Recommendations */}
+        {/* Product Recommendations Tab */}
+        <div className={`${styles.tabContent} ${activeTab === 'recommendations' ? styles.active : ''}`}>
         <div className={styles.section}>
           <h2>Product Recommendations</h2>
           <p className={styles.subtitle}>Select up to 2 products to recommend with this product</p>
@@ -1067,6 +1072,8 @@ export default function ProductEdit() {
             {isSaving ? 'Saving...' : 'Save Recommendations'}
           </button>
         </div>
+        </div>
+        {/* End Product Recommendations Tab */}
       </main>
     </div>
   );
