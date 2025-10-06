@@ -159,38 +159,44 @@ export default function ProductEdit() {
   };
 
   const handleAttributeToggle = (attrId) => {
-    const isCurrentlySelected = selectedAttributes[attrId];
+    // Ensure consistent string comparison
+    const attrIdStr = String(attrId);
+    const isCurrentlySelected = selectedAttributes[attrIdStr];
 
     setSelectedAttributes(prev => ({
       ...prev,
-      [attrId]: !prev[attrId]
+      [attrIdStr]: !prev[attrIdStr]
     }));
 
     // If selecting the attribute, select all its values
     if (!isCurrentlySelected) {
-      const attr = attributes.find(a => a.id === attrId);
+      const attr = attributes.find(a => String(a.id) === attrIdStr);
       if (attr && attr.attribute_values) {
-        const allValueIds = attr.attribute_values.map(v => v.id);
+        const allValueIds = attr.attribute_values.map(v => String(v.id));
         setSelectedValues(prev => ({
           ...prev,
-          [attrId]: allValueIds
+          [attrIdStr]: allValueIds
         }));
       }
     } else {
       // If deselecting, clear all values
       setSelectedValues(prev => ({
         ...prev,
-        [attrId]: []
+        [attrIdStr]: []
       }));
     }
   };
 
   const handleValueToggle = (attrId, valueId) => {
+    // Ensure consistent string comparison
+    const attrIdStr = String(attrId);
+    const valueIdStr = String(valueId);
+
     setSelectedValues(prev => ({
       ...prev,
-      [attrId]: prev[attrId]?.includes(valueId)
-        ? prev[attrId].filter(v => v !== valueId)
-        : [...(prev[attrId] || []), valueId]
+      [attrIdStr]: prev[attrIdStr]?.includes(valueIdStr)
+        ? prev[attrIdStr].filter(v => v !== valueIdStr)
+        : [...(prev[attrIdStr] || []), valueIdStr]
     }));
   };
 
