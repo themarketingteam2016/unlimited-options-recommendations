@@ -38,9 +38,13 @@ export default function EmbedWidget() {
       const foundProduct = productsData.find(p => p.id === id);
       setProduct(foundProduct);
 
+      console.log('Embed Widget - Product ID:', id);
+      console.log('Embed Widget - Found Product:', foundProduct);
+
       // Fetch variants
       const variantsRes = await fetch(`/api/products/${id}/variants`);
       const variantsData = await variantsRes.json();
+      console.log('Embed Widget - Variants Response:', variantsData);
       setVariants(Array.isArray(variantsData) ? variantsData : []);
 
       // Extract unique attributes
@@ -65,7 +69,11 @@ export default function EmbedWidget() {
             }
           });
         });
-        setAttributes(Object.values(uniqueAttrs));
+        const extractedAttributes = Object.values(uniqueAttrs);
+        console.log('Embed Widget - Extracted Attributes:', extractedAttributes);
+        setAttributes(extractedAttributes);
+      } else {
+        console.log('Embed Widget - No variants data to extract attributes from');
       }
 
       setLoading(false);
