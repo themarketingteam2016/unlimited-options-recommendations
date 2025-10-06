@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { handleCors } from '../../../../lib/cors';
 
-export default async function handler(req, res) {
+async function recommendationsHandler(req, res) {
   const { id: shopifyProductId } = req.query;
 
   if (!shopifyProductId) {
@@ -74,4 +75,8 @@ export default async function handler(req, res) {
     console.error('Failed to fetch recommendations:', error);
     res.status(500).json({ error: error.message });
   }
+}
+
+export default function handler(req, res) {
+  return handleCors(req, res, recommendationsHandler);
 }

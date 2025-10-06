@@ -1,7 +1,8 @@
 import { fetchShopifyProductsREST } from '../../../lib/shopify-client';
 import { supabaseAdmin } from '../../../lib/supabase';
+import { handleCors } from '../../../lib/cors';
 
-export default async function handler(req, res) {
+async function productsHandler(req, res) {
   if (req.method === 'GET') {
     try {
       // Fetch live products from Shopify
@@ -31,4 +32,8 @@ export default async function handler(req, res) {
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
+}
+
+export default function handler(req, res) {
+  return handleCors(req, res, productsHandler);
 }
