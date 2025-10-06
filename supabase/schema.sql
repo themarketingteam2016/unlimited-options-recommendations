@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS product_attributes (
 CREATE TABLE IF NOT EXISTS variants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  shopify_variant_id VARCHAR(255),
   sku VARCHAR(255),
   price DECIMAL(10,2),
   compare_at_price DECIMAL(10,2),

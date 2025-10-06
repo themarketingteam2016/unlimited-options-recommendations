@@ -174,36 +174,103 @@
       root.querySelector('.unlimited-add-to-cart').addEventListener('click', async () => {
         if (!selectedVariant) return;
 
+        const addToCartBtn = root.querySelector('.unlimited-add-to-cart');
+        const originalText = addToCartBtn.textContent;
+        addToCartBtn.disabled = true;
+        addToCartBtn.textContent = 'Adding...';
+
         try {
-          // Add to Shopify cart
-          const formData = {
-            items: [{
-              id: selectedVariant.shopify_variant_id || selectedVariant.id,
-              quantity: quantity
-            }]
-          };
+          // If variant has shopify_variant_id, use it directly
+          if (selectedVariant.shopify_variant_id) {
+            const variantId = String(selectedVariant.shopify_variant_id).replace(/\D/g, '');
 
-          const response = await fetch('/cart/add.js', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-          });
+            const response = await fetch('/cart/add.js', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                items: [{
+                  id: variantId,
+                  quantity: quantity,
+                  properties: {
+                    '_custom_variant': 'true',
+                    ...Object.fromEntries(
+                      Object.entries(selectedOptions).map(([attrId, valueId]) => {
+                        const attr = attributes.find(a => a.id === attrId);
+                        const value = attr?.values.find(v => v.id === valueId);
+                        return [attr?.name || attrId, value?.value || valueId];
+                      })
+                    )
+                  }
+                }]
+              })
+            });
 
-          if (response.ok) {
-            // Trigger cart update event
-            document.dispatchEvent(new CustomEvent('cart:updated'));
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.description || 'Failed to add to cart');
+            }
+          } else {
+            // Fallback: Use the product's first/default variant
+            const productVariantId = {{ product.variants.first.id }};
 
-            // Optional: Show success message
-            alert(`Added ${quantity} × ${product.title} to cart!`);
+            const response = await fetch('/cart/add.js', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                items: [{
+                  id: productVariantId,
+                  quantity: quantity,
+                  properties: {
+                    '_custom_options': 'Custom variant - See details below',
+                    '_sku': selectedVariant.sku || 'N/A',
+                    '_price': `$${selectedVariant.price}`,
+                    ...Object.fromEntries(
+                      Object.entries(selectedOptions).map(([attrId, valueId]) => {
+                        const attr = attributes.find(a => a.id === attrId);
+                        const value = attr?.values.find(v => v.id === valueId);
+                        return [attr?.name || attrId, value?.value || valueId];
+                      })
+                    )
+                  }
+                }]
+              })
+            });
 
-            // Reload cart if theme supports it
-            if (typeof window.Shopify !== 'undefined' && window.Shopify.onCartUpdate) {
-              window.Shopify.onCartUpdate();
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.description || 'Failed to add to cart');
             }
           }
+
+          // Success!
+          addToCartBtn.textContent = '✓ Added to Cart';
+          addToCartBtn.style.background = '#28a745';
+
+          // Trigger cart update event
+          document.dispatchEvent(new CustomEvent('cart:updated'));
+
+          // Reload cart if theme supports it
+          if (typeof window.Shopify !== 'undefined' && window.Shopify.onCartUpdate) {
+            window.Shopify.onCartUpdate();
+          }
+
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            addToCartBtn.textContent = originalText;
+            addToCartBtn.style.background = '#008060';
+            addToCartBtn.disabled = false;
+          }, 2000);
+
         } catch (error) {
           console.error('Error adding to cart:', error);
-          alert('Failed to add to cart. Please try again.');
+          addToCartBtn.textContent = 'Error - Try Again';
+          addToCartBtn.style.background = '#dc3545';
+
+          setTimeout(() => {
+            addToCartBtn.textContent = originalText;
+            addToCartBtn.style.background = '#008060';
+            addToCartBtn.disabled = false;
+          }, 3000);
         }
       });
 
