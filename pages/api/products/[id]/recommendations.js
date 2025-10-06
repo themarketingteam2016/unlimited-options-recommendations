@@ -31,11 +31,11 @@ async function recommendationsHandler(req, res) {
 
     // Fetch recommendations with full product details
     const { data, error } = await supabaseAdmin
-      .from('recommendations')
+      .from('product_recommendations')
       .select(`
         id,
-        reason,
-        recommended_product:products!recommendations_recommended_product_id_fkey (
+        display_order,
+        recommended_product:products!product_recommendations_recommended_product_id_fkey (
           id,
           shopify_product_id,
           shopify_handle,
@@ -46,7 +46,7 @@ async function recommendationsHandler(req, res) {
         )
       `)
       .eq('product_id', product.id)
-      .order('created_at', { ascending: false })
+      .order('display_order', { ascending: true })
       .limit(6);
 
     if (error) {
@@ -57,7 +57,8 @@ async function recommendationsHandler(req, res) {
     // Return recommendations with proper structure
     const recommendations = (data || []).map(rec => ({
       id: rec.id,
-      reason: rec.reason,
+      display_order: rec.display_order,
+      reason: null, // Can be added to schema later if needed
       recommended_product: {
         id: rec.recommended_product?.shopify_product_id,
         shopify_product_id: rec.recommended_product?.shopify_product_id,
