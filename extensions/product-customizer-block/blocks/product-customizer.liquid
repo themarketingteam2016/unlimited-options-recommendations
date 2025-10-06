@@ -1,0 +1,466 @@
+{% comment %}
+  Product Options & Customizer App Block
+  This block displays custom product options with variant selection
+{% endcomment %}
+
+<div id="unlimited-options-customizer-{{ block.id }}" class="unlimited-options-customizer" {{ block.shopify_attributes }}>
+  <div id="customizer-app-root"></div>
+</div>
+
+<script>
+  (function() {
+    const productId = '{{ product.id }}';
+    const apiUrl = '{{ shop.url }}';
+    const blockId = '{{ block.id }}';
+
+    // Create container for the customizer
+    const container = document.getElementById('unlimited-options-customizer-' + blockId);
+    const root = container.querySelector('#customizer-app-root');
+
+    // Load the customizer widget
+    async function loadCustomizer() {
+      try {
+        // Fetch product data
+        const productsRes = await fetch('/apps/unlimited-options/api/products');
+        const products = await productsRes.json();
+        const product = products.find(p => p.id === productId);
+
+        if (!product) {
+          console.error('Product not found for customizer');
+          return;
+        }
+
+        // Fetch variants
+        const variantsRes = await fetch(`/apps/unlimited-options/api/products/${encodeURIComponent(productId)}/variants`);
+        const variants = await variantsRes.json();
+
+        // Extract attributes
+        const attributes = extractAttributes(variants);
+
+        // Render customizer UI
+        renderCustomizer(product, variants, attributes);
+
+      } catch (error) {
+        console.error('Error loading customizer:', error);
+      }
+    }
+
+    function extractAttributes(variants) {
+      const uniqueAttrs = {};
+
+      variants.forEach(variant => {
+        variant.variant_options?.forEach(opt => {
+          if (opt.attribute) {
+            if (!uniqueAttrs[opt.attribute.id]) {
+              uniqueAttrs[opt.attribute.id] = {
+                ...opt.attribute,
+                values: []
+              };
+            }
+            if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
+              uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
+            }
+          }
+        });
+      });
+
+      return Object.values(uniqueAttrs);
+    }
+
+    function renderCustomizer(product, variants, attributes) {
+      let selectedOptions = {};
+      let selectedVariant = null;
+      let quantity = 1;
+
+      // Create HTML structure
+      const html = `
+        <div class="unlimited-options-widget">
+          <div class="unlimited-options-content">
+            ${attributes.map(attr => `
+              <div class="unlimited-option-group" data-attribute-id="${attr.id}">
+                <label class="unlimited-option-label">
+                  ${attr.name}
+                  ${attr.is_primary ? '<span class="unlimited-badge">Primary</span>' : ''}
+                </label>
+                <select class="unlimited-dropdown" data-attribute-id="${attr.id}">
+                  <option value="">Choose ${attr.name}</option>
+                  ${attr.values.map(value => `
+                    <option value="${value.id}">${value.value}</option>
+                  `).join('')}
+                </select>
+                <div class="unlimited-image-preview" style="display: none;">
+                  <img class="unlimited-preview-img" src="" alt="">
+                </div>
+              </div>
+            `).join('')}
+
+            <div class="unlimited-price-section" style="display: none;">
+              <div class="unlimited-price"></div>
+              <div class="unlimited-stock"></div>
+            </div>
+
+            <div class="unlimited-quantity-section">
+              <label>Quantity:</label>
+              <div class="unlimited-quantity-control">
+                <button type="button" class="unlimited-qty-btn unlimited-qty-minus">-</button>
+                <input type="number" class="unlimited-qty-input" value="1" min="1">
+                <button type="button" class="unlimited-qty-btn unlimited-qty-plus">+</button>
+              </div>
+            </div>
+
+            <button type="button" class="unlimited-add-to-cart" disabled>
+              Select All Options
+            </button>
+
+            <div class="unlimited-sku" style="display: none;"></div>
+          </div>
+        </div>
+      `;
+
+      root.innerHTML = html;
+
+      // Add event listeners
+      const dropdowns = root.querySelectorAll('.unlimited-dropdown');
+      dropdowns.forEach(dropdown => {
+        dropdown.addEventListener('change', function() {
+          const attrId = this.dataset.attributeId;
+          const valueId = this.value;
+
+          if (valueId) {
+            selectedOptions[attrId] = valueId;
+
+            // Show image preview if available
+            const attr = attributes.find(a => a.id === attrId);
+            const value = attr?.values.find(v => v.id === valueId);
+            const preview = this.parentElement.querySelector('.unlimited-image-preview');
+            const previewImg = this.parentElement.querySelector('.unlimited-preview-img');
+
+            if (value?.image_url) {
+              previewImg.src = value.image_url;
+              previewImg.alt = value.value;
+              preview.style.display = 'block';
+            } else {
+              preview.style.display = 'none';
+            }
+          } else {
+            delete selectedOptions[attrId];
+          }
+
+          updateVariant(variants, attributes);
+        });
+      });
+
+      // Quantity controls
+      root.querySelector('.unlimited-qty-minus').addEventListener('click', () => {
+        const input = root.querySelector('.unlimited-qty-input');
+        quantity = Math.max(1, parseInt(input.value) - 1);
+        input.value = quantity;
+      });
+
+      root.querySelector('.unlimited-qty-plus').addEventListener('click', () => {
+        const input = root.querySelector('.unlimited-qty-input');
+        quantity = parseInt(input.value) + 1;
+        input.value = quantity;
+      });
+
+      root.querySelector('.unlimited-qty-input').addEventListener('change', function() {
+        quantity = Math.max(1, parseInt(this.value) || 1);
+        this.value = quantity;
+      });
+
+      // Add to cart button
+      root.querySelector('.unlimited-add-to-cart').addEventListener('click', async () => {
+        if (!selectedVariant) return;
+
+        try {
+          // Add to Shopify cart
+          const formData = {
+            items: [{
+              id: selectedVariant.shopify_variant_id || selectedVariant.id,
+              quantity: quantity
+            }]
+          };
+
+          const response = await fetch('/cart/add.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+          });
+
+          if (response.ok) {
+            // Trigger cart update event
+            document.dispatchEvent(new CustomEvent('cart:updated'));
+
+            // Optional: Show success message
+            alert(`Added ${quantity} × ${product.title} to cart!`);
+
+            // Reload cart if theme supports it
+            if (typeof window.Shopify !== 'undefined' && window.Shopify.onCartUpdate) {
+              window.Shopify.onCartUpdate();
+            }
+          }
+        } catch (error) {
+          console.error('Error adding to cart:', error);
+          alert('Failed to add to cart. Please try again.');
+        }
+      });
+
+      function updateVariant(variants, attributes) {
+        // Find matching variant
+        const match = variants.find(variant => {
+          return variant.variant_options?.every(opt =>
+            selectedOptions[opt.attribute.id] === opt.attribute_value.id
+          );
+        });
+
+        selectedVariant = match || null;
+
+        // Update UI
+        const priceSection = root.querySelector('.unlimited-price-section');
+        const priceEl = root.querySelector('.unlimited-price');
+        const stockEl = root.querySelector('.unlimited-stock');
+        const skuEl = root.querySelector('.unlimited-sku');
+        const addToCartBtn = root.querySelector('.unlimited-add-to-cart');
+
+        const allSelected = attributes.every(attr => selectedOptions[attr.id]);
+
+        if (selectedVariant) {
+          priceSection.style.display = 'flex';
+          priceEl.textContent = `$${selectedVariant.price}`;
+          stockEl.textContent = selectedVariant.stock_quantity > 0
+            ? `In Stock: ${selectedVariant.stock_quantity}`
+            : 'Out of Stock';
+
+          if (selectedVariant.sku) {
+            skuEl.textContent = `SKU: ${selectedVariant.sku}`;
+            skuEl.style.display = 'block';
+          }
+
+          if (selectedVariant.stock_quantity > 0) {
+            addToCartBtn.disabled = false;
+            addToCartBtn.textContent = 'Add to Cart';
+          } else {
+            addToCartBtn.disabled = true;
+            addToCartBtn.textContent = 'Out of Stock';
+          }
+        } else {
+          if (allSelected) {
+            addToCartBtn.textContent = 'Variant Not Available';
+          } else {
+            addToCartBtn.textContent = 'Select All Options';
+          }
+          addToCartBtn.disabled = true;
+        }
+      }
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadCustomizer);
+    } else {
+      loadCustomizer();
+    }
+  })();
+</script>
+
+<style>
+  .unlimited-options-widget {
+    max-width: 100%;
+    margin: 20px 0;
+  }
+
+  .unlimited-options-content {
+    padding: 0;
+  }
+
+  .unlimited-option-group {
+    margin-bottom: 20px;
+  }
+
+  .unlimited-option-label {
+    display: block;
+    font-weight: 600;
+    color: #202223;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .unlimited-badge {
+    display: inline-block;
+    background: #008060;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin-left: 6px;
+    font-weight: 500;
+  }
+
+  .unlimited-dropdown {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #c9cccf;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #202223;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .unlimited-dropdown:hover {
+    border-color: #008060;
+  }
+
+  .unlimited-dropdown:focus {
+    outline: none;
+    border-color: #008060;
+    box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
+  }
+
+  .unlimited-image-preview {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f6f6f7;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .unlimited-preview-img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 2px solid #e3e5e7;
+  }
+
+  .unlimited-price-section {
+    margin: 20px 0;
+    padding: 16px;
+    background: #f6f6f7;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .unlimited-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: #008060;
+  }
+
+  .unlimited-stock {
+    font-size: 13px;
+    color: #6d7175;
+  }
+
+  .unlimited-quantity-section {
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .unlimited-quantity-section label {
+    font-weight: 600;
+    color: #202223;
+    font-size: 14px;
+  }
+
+  .unlimited-quantity-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .unlimited-qty-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #c9cccf;
+    border-radius: 6px;
+    background: white;
+    color: #202223;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .unlimited-qty-btn:hover {
+    border-color: #008060;
+    color: #008060;
+  }
+
+  .unlimited-qty-input {
+    width: 60px;
+    height: 36px;
+    border: 2px solid #c9cccf;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #202223;
+  }
+
+  .unlimited-qty-input:focus {
+    outline: none;
+    border-color: #008060;
+  }
+
+  .unlimited-add-to-cart {
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    background: #008060;
+    color: white;
+    transition: background 0.2s;
+    margin-top: 8px;
+  }
+
+  .unlimited-add-to-cart:hover:not(:disabled) {
+    background: #006e52;
+  }
+
+  .unlimited-add-to-cart:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #6d7175;
+  }
+
+  .unlimited-sku {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #6d7175;
+    text-align: center;
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Product Options Customizer",
+  "target": "section",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_quantity",
+      "label": "Show quantity selector",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_sku",
+      "label": "Show SKU",
+      "default": true
+    }
+  ],
+  "blocks": []
+}
+{% endschema %}

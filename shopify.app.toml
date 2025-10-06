@@ -2,12 +2,17 @@
 
 client_id = "bdd553541eb847b5a22e67344cf409ca"
 name = "unlimited-options"
-application_url = "https://example.com"
+application_url = "https://unlimtited-options-recommendations.vercel.app"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
 include_config_on_deploy = true
+
+[app_proxy]
+url = "https://unlimtited-options-recommendations.vercel.app"
+subpath = "unlimited-options"
+prefix = "apps"
 
 [webhooks]
 api_version = "2026-01"
@@ -17,4 +22,10 @@ api_version = "2026-01"
 scopes = "write_products"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://unlimtited-options-recommendations.vercel.app/api/auth",
+  "https://example.com/api/auth"
+]
+
+[extension_directories]
+extensions = "./extensions"
