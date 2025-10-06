@@ -1093,6 +1093,13 @@ export default function ProductEdit() {
                       .map(attrId => {
                         const attr = attributes.find(a => a.id === attrId);
                         if (!attr) return null;
+                        // Get only selected values for this attribute
+                        const attrIdStr = String(attrId);
+                        const selectedValuesForAttr = selectedValues[attrIdStr] || [];
+                        const availableValues = attr?.attribute_values?.filter(val =>
+                          selectedValuesForAttr.includes(String(val.id))
+                        ) || [];
+
                         return (
                           <div key={attrId} className={styles.formGroup}>
                             <label>{attr.name}</label>
@@ -1102,7 +1109,7 @@ export default function ProductEdit() {
                               className={styles.formSelect}
                             >
                               <option value="">Select {attr.name}...</option>
-                              {attr?.attribute_values?.map(val => (
+                              {availableValues.map(val => (
                                 <option key={val.id} value={val.id}>
                                   {val.value}
                                 </option>
