@@ -579,3 +579,43 @@
 .tabContent.active {
   display: block;
 }
+
+.embedSection {
+  margin-top: 20px;
+}
+
+.codeBlock {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 20px;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.codeBlock code {
+  white-space: pre;
+  display: block;
+}
+
+.copyButton {
+  padding: 10px 20px;
+  background: #008060;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copyButton:hover {
+  background: #006e52;
+}
