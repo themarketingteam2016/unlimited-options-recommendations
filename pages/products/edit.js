@@ -192,6 +192,14 @@ export default function ProductEdit() {
     const attrIdStr = String(attrId);
     const valueIdStr = String(valueId);
 
+    // Auto-select the attribute if not already selected
+    if (!selectedAttributes[attrIdStr]) {
+      setSelectedAttributes(prev => ({
+        ...prev,
+        [attrIdStr]: true
+      }));
+    }
+
     setSelectedValues(prev => ({
       ...prev,
       [attrIdStr]: prev[attrIdStr]?.includes(valueIdStr)
