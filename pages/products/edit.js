@@ -700,8 +700,11 @@ export default function ProductEdit() {
         </div>
 
         {message && (
-          <div className={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
-            {message.text}
+          <div className={`${styles.toast} ${message.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
+            <div className={styles.toastIcon}>
+              {message.type === 'success' ? '✓' : '✕'}
+            </div>
+            <div className={styles.toastText}>{message.text}</div>
           </div>
         )}
 
