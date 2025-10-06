@@ -180,66 +180,66 @@
         addToCartBtn.textContent = 'Adding...';
 
         try {
-          // If variant has shopify_variant_id, use it directly
-          if (selectedVariant.shopify_variant_id) {
-            const variantId = String(selectedVariant.shopify_variant_id).replace(/\D/g, '');
+          // Call our API to get cart data (creates Shopify variant if needed)
+          const apiResponse = await fetch(`${apiUrl}/api/cart/add-variant`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              variantId: selectedVariant.id,
+              quantity: quantity
+            })
+          });
 
-            const response = await fetch('/cart/add.js', {
+          if (!apiResponse.ok) {
+            const error = await apiResponse.json();
+            throw new Error(error.error || 'Failed to prepare cart');
+          }
+
+          const apiData = await apiResponse.json();
+
+          // If success with Shopify variant, add to cart
+          if (apiData.success && apiData.cartData) {
+            const cartResponse = await fetch('/cart/add.js', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                items: [{
-                  id: variantId,
-                  quantity: quantity,
-                  properties: {
-                    '_custom_variant': 'true',
-                    ...Object.fromEntries(
-                      Object.entries(selectedOptions).map(([attrId, valueId]) => {
-                        const attr = attributes.find(a => a.id === attrId);
-                        const value = attr?.values.find(v => v.id === valueId);
-                        return [attr?.name || attrId, value?.value || valueId];
-                      })
-                    )
-                  }
-                }]
-              })
+              body: JSON.stringify({ items: [apiData.cartData] })
             });
 
-            if (!response.ok) {
-              const error = await response.json();
-              throw new Error(error.description || 'Failed to add to cart');
+            if (!cartResponse.ok) {
+              const cartError = await cartResponse.json();
+              throw new Error(cartError.description || 'Failed to add to cart');
             }
-          } else {
-            // Fallback: Use the product's first/default variant
+          } else if (apiData.fallback) {
+            // Fallback mode: use default variant with properties
             const productVariantId = {{ product.variants.first.id }};
+            const properties = {
+              '_Custom_Variant': 'Yes',
+              '_SKU': apiData.variant.sku || 'Custom',
+              '_Price': `$${apiData.variant.price}`
+            };
 
-            const response = await fetch('/cart/add.js', {
+            apiData.variant.options?.forEach(opt => {
+              properties[opt.name] = opt.value;
+            });
+
+            const cartResponse = await fetch('/cart/add.js', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 items: [{
                   id: productVariantId,
                   quantity: quantity,
-                  properties: {
-                    '_custom_options': 'Custom variant - See details below',
-                    '_sku': selectedVariant.sku || 'N/A',
-                    '_price': `$${selectedVariant.price}`,
-                    ...Object.fromEntries(
-                      Object.entries(selectedOptions).map(([attrId, valueId]) => {
-                        const attr = attributes.find(a => a.id === attrId);
-                        const value = attr?.values.find(v => v.id === valueId);
-                        return [attr?.name || attrId, value?.value || valueId];
-                      })
-                    )
-                  }
+                  properties: properties
                 }]
               })
             });
 
-            if (!response.ok) {
-              const error = await response.json();
-              throw new Error(error.description || 'Failed to add to cart');
+            if (!cartResponse.ok) {
+              const cartError = await cartResponse.json();
+              throw new Error(cartError.description || 'Failed to add to cart');
             }
+
+            console.warn('Using fallback mode - line item properties only');
           }
 
           // Success!
@@ -254,6 +254,9 @@
             window.Shopify.onCartUpdate();
           }
 
+          // Optionally redirect to cart
+          // window.location.href = '/cart';
+
           // Reset button after 2 seconds
           setTimeout(() => {
             addToCartBtn.textContent = originalText;
@@ -265,6 +268,8 @@
           console.error('Error adding to cart:', error);
           addToCartBtn.textContent = 'Error - Try Again';
           addToCartBtn.style.background = '#dc3545';
+
+          alert(`Failed to add to cart: ${error.message}`);
 
           setTimeout(() => {
             addToCartBtn.textContent = originalText;
