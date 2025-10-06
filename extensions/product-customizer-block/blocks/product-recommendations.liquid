@@ -39,6 +39,7 @@
     let selectedProducts = new Set();
     let productVariantsCache = {};
     let selectedVariants = {};
+    let mainProduct = null;
 
     // Show loading state
     root.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">Loading recommendations...</div>';
@@ -46,6 +47,18 @@
     async function loadRecommendations() {
       try {
         console.log('Loading recommendations for product:', productId);
+
+        // Fetch main product variants first
+        await fetchProductVariants(productId, 'main-product');
+
+        // Store main product info
+        mainProduct = {
+          id: 'main-product',
+          shopify_product_id: productId,
+          title: '{{ product.title }}',
+          image_url: '{{ product.featured_image | img_url: "medium" }}',
+          handle: '{{ product.handle }}'
+        };
 
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/recommendations`);
 
@@ -64,7 +77,7 @@
           return;
         }
 
-        // Fetch variants for each product
+        // Fetch variants for each recommended product
         for (const rec of recommendations) {
           const product = rec.recommended_product;
           if (product && product.shopify_product_id) {
@@ -106,12 +119,59 @@
     }
 
     function renderRecommendations(recommendations) {
+      const mainProductStartingPrice = getStartingPrice('main-product');
+      const hasMainVariants = (productVariantsCache['main-product'] || []).length > 0;
+
       const html = `
         <div class="unlimited-recommendations-widget">
-          <h3 class="unlimited-recommendations-title">Complete Your Bundle</h3>
-          <p class="unlimited-recommendations-subtitle">Select products and add them together</p>
+          <div class="unlimited-bundle-header">
+            <div class="unlimited-header-left">
+              <h3 class="unlimited-recommendations-title">Complete Your Bundle</h3>
+              <p class="unlimited-recommendations-subtitle">Select products and add them together</p>
+            </div>
+            <div class="unlimited-select-all-container">
+              <label class="unlimited-select-all-label">
+                <input type="checkbox" id="select-all-${blockId}" class="unlimited-select-all-checkbox">
+                <span>Select All</span>
+              </label>
+            </div>
+          </div>
 
           <div class="unlimited-recommendations-grid">
+            <!-- Main Product Card -->
+            <div class="unlimited-recommendation-card unlimited-main-product-card" data-product-id="main-product">
+              <div class="unlimited-main-badge">Current Product</div>
+              <div class="unlimited-recommendation-checkbox">
+                <input
+                  type="checkbox"
+                  id="product-main-product"
+                  class="unlimited-product-checkbox"
+                  data-product-id="main-product"
+                  data-product-name="${mainProduct.title}"
+                  data-has-variants="${hasMainVariants}"
+                >
+                <label for="product-main-product"></label>
+              </div>
+
+              <a href="/products/${mainProduct.handle}" class="unlimited-recommendation-link">
+                ${mainProduct.image_url ? `
+                  <div class="unlimited-recommendation-image">
+                    <img src="${mainProduct.image_url}" alt="${mainProduct.title}" loading="lazy">
+                  </div>
+                ` : ''}
+                <div class="unlimited-recommendation-details">
+                  <h4 class="unlimited-recommendation-product-title">${mainProduct.title}</h4>
+                  <div class="unlimited-recommendation-price">
+                    ${mainProductStartingPrice ? `
+                      <span class="unlimited-price-label">Starting from</span>
+                      <span class="unlimited-price-value">$${mainProductStartingPrice}</span>
+                    ` : `<span class="unlimited-price-value">Select options</span>`}
+                  </div>
+                </div>
+              </a>
+            </div>
+
+            <!-- Recommended Products -->
             ${recommendations.map(rec => {
               const product = rec.recommended_product;
               if (!product) return '';
@@ -187,6 +247,12 @@
         checkbox.addEventListener('change', handleCheckboxChange);
       });
 
+      // Select All checkbox
+      const selectAllCheckbox = document.getElementById(`select-all-${blockId}`);
+      if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', handleSelectAll);
+      }
+
       // Bulk add button
       const bulkBtn = document.getElementById(`bulk-add-btn-${blockId}`);
       if (bulkBtn) {
@@ -205,6 +271,25 @@
       if (confirmBtn) confirmBtn.addEventListener('click', confirmBulkAdd);
     }
 
+    function handleSelectAll(e) {
+      const checkboxes = root.querySelectorAll('.unlimited-product-checkbox');
+      const isChecked = e.target.checked;
+
+      checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+        const productId = checkbox.dataset.productId;
+
+        if (isChecked) {
+          selectedProducts.add(productId);
+        } else {
+          selectedProducts.delete(productId);
+          delete selectedVariants[productId];
+        }
+      });
+
+      updateSelectedCount();
+    }
+
     function handleCheckboxChange(e) {
       const productId = e.target.dataset.productId;
 
@@ -216,6 +301,20 @@
       }
 
       updateSelectedCount();
+      updateSelectAllCheckbox();
+    }
+
+    function updateSelectAllCheckbox() {
+      const selectAllCheckbox = document.getElementById(`select-all-${blockId}`);
+      const checkboxes = root.querySelectorAll('.unlimited-product-checkbox');
+
+      if (!selectAllCheckbox || checkboxes.length === 0) return;
+
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+      const someChecked = Array.from(checkboxes).some(cb => cb.checked);
+
+      selectAllCheckbox.checked = allChecked;
+      selectAllCheckbox.indeterminate = someChecked && !allChecked;
     }
 
     function updateSelectedCount() {
@@ -507,19 +606,82 @@
     max-width: 100%;
   }
 
+  .unlimited-bundle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    padding: 20px;
+    background: #f6f6f7;
+    border-radius: 8px;
+  }
+
+  .unlimited-header-left {
+    flex: 1;
+  }
+
   .unlimited-recommendations-title {
     font-size: 28px;
     font-weight: 700;
     color: #202223;
-    margin-bottom: 8px;
-    text-align: center;
+    margin-bottom: 4px;
+    text-align: left;
   }
 
   .unlimited-recommendations-subtitle {
     font-size: 14px;
     color: #6d7175;
-    text-align: center;
-    margin-bottom: 32px;
+    text-align: left;
+    margin: 0;
+  }
+
+  .unlimited-select-all-container {
+    display: flex;
+    align-items: center;
+  }
+
+  .unlimited-select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    color: #202223;
+    padding: 12px 20px;
+    background: white;
+    border-radius: 6px;
+    border: 2px solid #c9cccf;
+    transition: all 0.2s;
+  }
+
+  .unlimited-select-all-label:hover {
+    border-color: #008060;
+    background: #f9fafb;
+  }
+
+  .unlimited-select-all-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #008060;
+  }
+
+  @media (max-width: 768px) {
+    .unlimited-bundle-header {
+      flex-direction: column;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .unlimited-select-all-container {
+      width: 100%;
+    }
+
+    .unlimited-select-all-label {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
   .unlimited-recommendations-grid {
@@ -550,6 +712,28 @@
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
     transform: translateY(-4px);
     border-color: #008060;
+  }
+
+  .unlimited-main-product-card {
+    border-color: #008060;
+    border-width: 3px;
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf9 100%);
+  }
+
+  .unlimited-main-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #008060 0%, #006e52 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 128, 96, 0.3);
   }
 
   .unlimited-recommendation-checkbox {
