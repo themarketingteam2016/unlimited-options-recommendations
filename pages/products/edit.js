@@ -691,6 +691,15 @@ export default function ProductEdit() {
 
       <Sidebar />
 
+      {message && (
+        <div className={`${styles.toast} ${message.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
+          <div className={styles.toastIcon}>
+            {message.type === 'success' ? '✓' : '✕'}
+          </div>
+          <div className={styles.toastText}>{message.text}</div>
+        </div>
+      )}
+
       <main className={styles.main}>
         <div className={styles.header}>
           <div>
@@ -698,15 +707,6 @@ export default function ProductEdit() {
             <h1>{product.title}</h1>
           </div>
         </div>
-
-        {message && (
-          <div className={`${styles.toast} ${message.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
-            <div className={styles.toastIcon}>
-              {message.type === 'success' ? '✓' : '✕'}
-            </div>
-            <div className={styles.toastText}>{message.text}</div>
-          </div>
-        )}
 
         {/* Tabs */}
         <div className={styles.tabs}>
