@@ -39,12 +39,12 @@ export default function Storefront() {
       setProduct(foundProduct);
 
       // Fetch variants
-      const variantsRes = await fetch(`/api/products/${id}/variants`);
+      const variantsRes = await fetch(`/api/products/${encodeURIComponent(id)}/variants`);
       const variantsData = await variantsRes.json();
       setVariants(Array.isArray(variantsData) ? variantsData : []);
 
       // Fetch recommendations
-      const recsRes = await fetch(`/api/products/${id}/recommendations`);
+      const recsRes = await fetch(`/api/products/${encodeURIComponent(id)}/recommendations`);
       if (recsRes.ok) {
         const recsData = await recsRes.json();
         setRecommendations(Array.isArray(recsData) ? recsData : []);

@@ -21,7 +21,7 @@ export default function BundleCart({ productId, primaryOptionValue }) {
 
   const fetchRecommendations = async () => {
     try {
-      const res = await fetch(`/api/products/${productId}/recommendations`);
+      const res = await fetch(`/api/products/${encodeURIComponent(productId)}/recommendations`);
       const data = await res.json();
       setRecommendations(Array.isArray(data) ? data.slice(0, 2) : []);
       setLoading(false);
@@ -34,7 +34,7 @@ export default function BundleCart({ productId, primaryOptionValue }) {
   const updateRecommendationImages = async () => {
     // Fetch variants for each recommended product that match the primary option value
     for (const rec of recommendations) {
-      const res = await fetch(`/api/products/${rec.recommended_product.id}/variants`);
+      const res = await fetch(`/api/products/${encodeURIComponent(rec.recommended_product.id)}/variants`);
       const variants = await res.json();
 
       // Find variant with matching primary option value
@@ -62,7 +62,7 @@ export default function BundleCart({ productId, primaryOptionValue }) {
 
   const handleProductClick = async (product) => {
     // Fetch variants for this product
-    const res = await fetch(`/api/products/${product.id}/variants`);
+    const res = await fetch(`/api/products/${encodeURIComponent(product.id)}/variants`);
     const variants = await res.json();
 
     if (variants.length > 1) {

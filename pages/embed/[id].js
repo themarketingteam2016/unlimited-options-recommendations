@@ -41,8 +41,8 @@ export default function EmbedWidget() {
       console.log('Embed Widget - Product ID:', id);
       console.log('Embed Widget - Found Product:', foundProduct);
 
-      // Fetch variants
-      const variantsRes = await fetch(`/api/products/${id}/variants`);
+      // Fetch variants (encode ID to handle special characters)
+      const variantsRes = await fetch(`/api/products/${encodeURIComponent(id)}/variants`);
       const variantsData = await variantsRes.json();
       console.log('Embed Widget - Variants Response:', variantsData);
       setVariants(Array.isArray(variantsData) ? variantsData : []);
