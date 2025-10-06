@@ -10,11 +10,15 @@ async function addVariantHandler(req, res) {
   try {
     const { variantId, quantity = 1 } = req.body;
 
+    console.log('[add-variant] Request received:', { variantId, quantity });
+
     if (!variantId) {
+      console.error('[add-variant] Missing variantId');
       return res.status(400).json({ error: 'variantId is required' });
     }
 
     // Get variant details from database
+    console.log('[add-variant] Fetching variant from database:', variantId);
     const { data: variant, error: variantError } = await supabaseAdmin
       .from('variants')
       .select(`
@@ -29,13 +33,29 @@ async function addVariantHandler(req, res) {
       .single();
 
     if (variantError || !variant) {
-      return res.status(404).json({ error: 'Variant not found' });
+      console.error('[add-variant] Variant not found:', variantError);
+      return res.status(404).json({
+        error: 'Variant not found',
+        details: variantError?.message
+      });
     }
+
+    console.log('[add-variant] Variant found:', {
+      id: variant.id,
+      sku: variant.sku,
+      stock: variant.stock_quantity,
+      shopifyVariantId: variant.shopify_variant_id,
+      productId: variant.product?.shopify_product_id
+    });
 
     // Check stock
     if (variant.stock_quantity < quantity) {
+      console.error('[add-variant] Insufficient stock:', {
+        requested: quantity,
+        available: variant.stock_quantity
+      });
       return res.status(400).json({
-        error: 'Insufficient stock',
+        error: 'Out of stock',
         available: variant.stock_quantity
       });
     }
@@ -44,10 +64,12 @@ async function addVariantHandler(req, res) {
 
     // Create Shopify variant if it doesn't exist
     if (!shopifyVariantId) {
+      console.log('[add-variant] Creating Shopify variant on-demand');
       try {
         shopifyVariantId = await createVariantOnDemand(variantId);
+        console.log('[add-variant] Shopify variant created:', shopifyVariantId);
       } catch (error) {
-        console.error('Failed to create Shopify variant:', error);
+        console.error('[add-variant] Failed to create Shopify variant:', error.message);
         // Fallback: return data for client-side cart add with properties
         return res.status(200).json({
           success: false,
@@ -62,13 +84,17 @@ async function addVariantHandler(req, res) {
               value: opt.attribute_value.value
             })) || []
           },
-          message: 'Using fallback mode with line item properties'
+          message: 'Using fallback mode with line item properties',
+          error: error.message
         });
       }
+    } else {
+      console.log('[add-variant] Using existing Shopify variant:', shopifyVariantId);
     }
 
     // Extract numeric ID from GID
     const numericVariantId = shopifyVariantId.split('/').pop();
+    console.log('[add-variant] Extracted numeric variant ID:', numericVariantId);
 
     // Build line item properties
     const properties = {};
@@ -80,8 +106,10 @@ async function addVariantHandler(req, res) {
       properties['_SKU'] = variant.sku;
     }
 
+    console.log('[add-variant] Built cart data with properties:', properties);
+
     // Return cart add data
-    res.status(200).json({
+    const response = {
       success: true,
       cartData: {
         id: numericVariantId,
@@ -94,10 +122,16 @@ async function addVariantHandler(req, res) {
         price: variant.price,
         stock: variant.stock_quantity
       }
-    });
+    };
+
+    console.log('[add-variant] Success response:', response);
+    res.status(200).json(response);
   } catch (error) {
-    console.error('Add variant error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[add-variant] Unexpected error:', error);
+    res.status(500).json({
+      error: error.message,
+      details: error.stack
+    });
   }
 }
 
