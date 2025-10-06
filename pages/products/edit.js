@@ -412,6 +412,24 @@ export default function ProductEdit() {
           setMessage({ type: 'success', text: 'Variants updated successfully!' });
           await fetchVariants();
         }
+      } else if (bulkAction === 'stock') {
+        const updatedVariants = variants
+          .filter(v => selectedVariants.includes(v.id))
+          .map(v => ({
+            ...v,
+            stock_quantity: parseInt(bulkValue) || 0
+          }));
+
+        const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variants: updatedVariants })
+        });
+
+        if (res.ok) {
+          setMessage({ type: 'success', text: 'Stock updated successfully!' });
+          await fetchVariants();
+        }
       }
 
       setBulkAction('');
@@ -873,14 +891,17 @@ export default function ProductEdit() {
                   <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
                     <option value="">Bulk Actions</option>
                     <option value="price">Set Price</option>
+                    <option value="stock">Set Stock</option>
                     <option value="delete">Delete</option>
                   </select>
-                  {bulkAction === 'price' && (
+                  {(bulkAction === 'price' || bulkAction === 'stock') && (
                     <input
                       type="number"
-                      placeholder="Value"
+                      placeholder={bulkAction === 'stock' ? 'Stock Quantity' : 'Price'}
                       value={bulkValue}
                       onChange={e => setBulkValue(e.target.value)}
+                      min={bulkAction === 'stock' ? '0' : undefined}
+                      step={bulkAction === 'price' ? '0.01' : '1'}
                     />
                   )}
                   <button className={styles.btnSecondary} onClick={handleBulkAction}>
