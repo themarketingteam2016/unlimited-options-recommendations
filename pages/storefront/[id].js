@@ -15,6 +15,7 @@ export default function Storefront() {
   const [primaryAttribute, setPrimaryAttribute] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState({});
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,6 +42,13 @@ export default function Storefront() {
       const variantsRes = await fetch(`/api/products/${id}/variants`);
       const variantsData = await variantsRes.json();
       setVariants(Array.isArray(variantsData) ? variantsData : []);
+
+      // Fetch recommendations
+      const recsRes = await fetch(`/api/products/${id}/recommendations`);
+      if (recsRes.ok) {
+        const recsData = await recsRes.json();
+        setRecommendations(Array.isArray(recsData) ? recsData : []);
+      }
 
       // Extract unique attributes
       if (variantsData && variantsData.length > 0) {
@@ -151,22 +159,29 @@ export default function Storefront() {
                       {attr.name}
                       {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                     </label>
-                    <div className={styles.optionButtons}>
+                    <select
+                      className={styles.dropdown}
+                      value={selectedOptions[attr.id] || ''}
+                      onChange={(e) => handleOptionSelect(attr.id, e.target.value)}
+                    >
+                      <option value="">Select {attr.name}</option>
                       {attr.values.map(value => (
-                        <button
-                          key={value.id}
-                          className={`${styles.optionButton} ${
-                            selectedOptions[attr.id] === value.id ? styles.selected : ''
-                          }`}
-                          onClick={() => handleOptionSelect(attr.id, value.id)}
-                        >
-                          {value.image_url && (
-                            <img src={value.image_url} alt={value.value} className={styles.optionImg} />
-                          )}
+                        <option key={value.id} value={value.id}>
                           {value.value}
-                        </button>
+                        </option>
                       ))}
-                    </div>
+                    </select>
+                    {selectedOptions[attr.id] && (
+                      <div className={styles.selectedImagePreview}>
+                        {attr.values.find(v => v.id === selectedOptions[attr.id])?.image_url && (
+                          <img
+                            src={attr.values.find(v => v.id === selectedOptions[attr.id])?.image_url}
+                            alt={attr.values.find(v => v.id === selectedOptions[attr.id])?.value}
+                            className={styles.previewImg}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -197,6 +212,30 @@ export default function Storefront() {
         </div>
 
         <BundleCart productId={id} primaryOptionValue={getPrimaryOptionValue()} />
+
+        {recommendations.length > 0 && (
+          <div className={styles.recommendationsSection}>
+            <h2>You May Also Like</h2>
+            <div className={styles.recommendationsGrid}>
+              {recommendations.map(rec => (
+                <a
+                  key={rec.id}
+                  href={`/storefront/${encodeURIComponent(rec.recommended_product.shopify_product_id)}`}
+                  className={styles.recommendationCard}
+                >
+                  {(rec.recommended_product.image_url || rec.recommended_product.featuredImage?.url) && (
+                    <img
+                      src={rec.recommended_product.image_url || rec.recommended_product.featuredImage?.url}
+                      alt={rec.recommended_product.title}
+                      className={styles.recImage}
+                    />
+                  )}
+                  <h3>{rec.recommended_product.title}</h3>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
