@@ -349,38 +349,47 @@
     }
 
     function showVariantModal(productIds) {
-      const modalContent = productIds.map(productId => {
-        const variants = productVariantsCache[productId] || [];
-        if (variants.length === 0) return '';
+      const instructionText = productIds.length > 1
+        ? `Please select options for all ${productIds.length} products in your bundle.`
+        : 'Please select options for this product.';
 
-        // Extract attributes
-        const attributes = extractAttributes(variants);
-        const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
-        const productName = checkbox?.dataset.productName || 'Product';
+      const modalContent = `
+        <div class="unlimited-modal-instruction">
+          <p>${instructionText}</p>
+        </div>
+        ${productIds.map(productId => {
+          const variants = productVariantsCache[productId] || [];
+          if (variants.length === 0) return '';
 
-        return `
-          <div class="unlimited-product-variant-section" data-product-id="${productId}">
-            <h4 class="unlimited-variant-product-name">${productName}</h4>
+          // Extract attributes
+          const attributes = extractAttributes(variants);
+          const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
+          const productName = checkbox?.dataset.productName || 'Product';
 
-            ${attributes.map(attr => `
-              <div class="unlimited-variant-option-group">
-                <label class="unlimited-variant-label">${attr.name}</label>
-                <select class="unlimited-variant-select" data-product-id="${productId}" data-attribute-id="${attr.id}">
-                  <option value="">Choose ${attr.name}</option>
-                  ${attr.values.map(value => `
-                    <option value="${value.id}">${value.value}</option>
-                  `).join('')}
-                </select>
+          return `
+            <div class="unlimited-product-variant-section" data-product-id="${productId}">
+              <h4 class="unlimited-variant-product-name">${productName}</h4>
+
+              ${attributes.map(attr => `
+                <div class="unlimited-variant-option-group">
+                  <label class="unlimited-variant-label">${attr.name} <span class="unlimited-required">*</span></label>
+                  <select class="unlimited-variant-select" data-product-id="${productId}" data-attribute-id="${attr.id}" required>
+                    <option value="">Choose ${attr.name}</option>
+                    ${attr.values.map(value => `
+                      <option value="${value.id}">${value.value}</option>
+                    `).join('')}
+                  </select>
+                </div>
+              `).join('')}
+
+              <div class="unlimited-variant-preview" style="display: none;">
+                <div class="unlimited-variant-price"></div>
+                <div class="unlimited-variant-stock"></div>
               </div>
-            `).join('')}
-
-            <div class="unlimited-variant-preview" style="display: none;">
-              <div class="unlimited-variant-price"></div>
-              <div class="unlimited-variant-stock"></div>
             </div>
-          </div>
-        `;
-      }).join('');
+          `;
+        }).join('')}
+      `;
 
       modalBody.innerHTML = modalContent;
 
@@ -471,6 +480,22 @@
       const confirmBtn = modal.querySelector('.unlimited-modal-confirm');
       const originalText = confirmBtn?.textContent || 'Add Selected to Cart';
 
+      // Validate all products have variants selected
+      const missingVariants = [];
+      for (const productId of selectedProducts) {
+        const variants = productVariantsCache[productId] || [];
+        if (variants.length > 0 && !selectedVariants[productId]) {
+          const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
+          const productName = checkbox?.dataset.productName || 'Unknown product';
+          missingVariants.push(productName);
+        }
+      }
+
+      if (missingVariants.length > 0) {
+        alert(`Please select variants for:\n\n${missingVariants.map(name => `• ${name}`).join('\n')}`);
+        return;
+      }
+
       if (confirmBtn) {
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Adding...';
@@ -483,27 +508,23 @@
           const variants = productVariantsCache[productId] || [];
 
           if (variants.length === 0) {
-            // No variants, skip or handle differently
             console.warn(`No variants for product ${productId}`);
             continue;
           }
 
           let variantToAdd = selectedVariants[productId];
 
-          // If no variant selected but product has variants, skip
-          if (!variantToAdd && variants.length > 0) {
+          // This should not happen now due to validation above
+          if (!variantToAdd) {
             console.warn(`No variant selected for product ${productId}`);
             continue;
           }
 
-          // If still no variant, use first available
-          if (!variantToAdd) {
-            variantToAdd = variants[0];
-          }
-
           // Check stock
           if (variantToAdd.stock_quantity <= 0) {
-            alert(`${variantToAdd.sku || 'Product'} is out of stock`);
+            const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
+            const productName = checkbox?.dataset.productName || 'Product';
+            alert(`${productName} is out of stock`);
             continue;
           }
 
@@ -531,7 +552,7 @@
         }
 
         if (itemsToAdd.length === 0) {
-          throw new Error('No items to add. Please select variants for all products.');
+          throw new Error('No items could be added. Please check product availability.');
         }
 
         // Add all items to cart in one request
@@ -943,6 +964,21 @@
     flex: 1;
   }
 
+  .unlimited-modal-instruction {
+    background: #e8f5f1;
+    border-left: 4px solid #008060;
+    padding: 16px;
+    margin-bottom: 24px;
+    border-radius: 6px;
+  }
+
+  .unlimited-modal-instruction p {
+    margin: 0;
+    font-size: 14px;
+    color: #202223;
+    line-height: 1.5;
+  }
+
   .unlimited-product-variant-section {
     margin-bottom: 32px;
     padding-bottom: 32px;
@@ -972,6 +1008,11 @@
     color: #202223;
     margin-bottom: 8px;
     font-size: 14px;
+  }
+
+  .unlimited-required {
+    color: #dc3545;
+    margin-left: 2px;
   }
 
   .unlimited-variant-select {
