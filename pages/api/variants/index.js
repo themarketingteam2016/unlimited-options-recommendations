@@ -26,6 +26,8 @@ export default async function handler(req, res) {
           *,
           variant_options (
             id,
+            attribute_id,
+            attribute_value_id,
             attribute:attributes (
               id,
               name
