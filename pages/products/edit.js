@@ -39,6 +39,15 @@ export default function ProductEdit() {
     }
   }, [productId]);
 
+  // Debug: Log when selectedAttributes or selectedValues change
+  useEffect(() => {
+    console.log('selectedAttributes state changed:', selectedAttributes);
+  }, [selectedAttributes]);
+
+  useEffect(() => {
+    console.log('selectedValues state changed:', selectedValues);
+  }, [selectedValues]);
+
   const fetchData = async () => {
     try {
       // Fetch all attributes
@@ -52,7 +61,11 @@ export default function ProductEdit() {
       console.log('Response status:', attrsRes.status);
       console.log('Data:', attrsData);
       console.log('First attribute:', attrsData[0]);
+      console.log('First attribute ID type:', typeof attrsData[0]?.id, attrsData[0]?.id);
       console.log('First attribute values:', attrsData[0]?.attribute_values);
+      if (attrsData[0]?.attribute_values?.[0]) {
+        console.log('First value ID type:', typeof attrsData[0].attribute_values[0].id, attrsData[0].attribute_values[0].id);
+      }
       console.log('=========================');
 
       if (!Array.isArray(attrsData)) {
@@ -96,10 +109,24 @@ export default function ProductEdit() {
         const usedValuesByAttribute = {};
 
         console.log('=== RESTORING SELECTIONS ===');
-        console.log('Variants with options:', variantsData);
+        console.log('Number of variants:', variantsData.length);
+        console.log('First variant:', variantsData[0]);
+        console.log('First variant options:', variantsData[0]?.variant_options);
 
         variantsData.forEach(variant => {
-          variant.variant_options?.forEach(opt => {
+          if (!variant.variant_options || variant.variant_options.length === 0) {
+            console.warn('Variant has no options:', variant);
+            return;
+          }
+
+          variant.variant_options.forEach(opt => {
+            console.log('Processing option:', {
+              attribute_id: opt.attribute_id,
+              attribute_id_type: typeof opt.attribute_id,
+              attribute_value_id: opt.attribute_value_id,
+              attribute_value_id_type: typeof opt.attribute_value_id
+            });
+
             // Ensure IDs are strings for consistent comparison
             const attrId = String(opt.attribute_id);
             const valueId = String(opt.attribute_value_id);
@@ -134,7 +161,12 @@ export default function ProductEdit() {
         console.log('Setting selected values:', selectedVals);
         setSelectedValues(selectedVals);
 
+        console.log('Current state after setting:');
+        console.log('selectedAttributes:', selectedAttrs);
+        console.log('selectedValues:', selectedVals);
         console.log('=========================');
+      } else {
+        console.log('No variants found for restoration');
       }
 
       setLoading(false);
