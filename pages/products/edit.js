@@ -259,6 +259,27 @@ export default function ProductEdit() {
         return;
       }
 
+      // Check if this combination already exists
+      const combinationExists = variants.some(variant => {
+        // Check if variant has the same number of options as selected attributes
+        if (variant.variant_options?.length !== selectedAttrs.length) {
+          return false;
+        }
+
+        // Check if all attribute-value pairs match
+        return variant.variant_options.every(opt => {
+          const selectedValueId = manualVariant[opt.attribute_id];
+          return selectedValueId && String(opt.attribute_value_id) === String(selectedValueId);
+        });
+      });
+
+      if (combinationExists) {
+        setMessage({ type: 'error', text: 'This variant combination already exists!' });
+        setIsSaving(false);
+        setTimeout(() => setMessage(null), 3000);
+        return;
+      }
+
       console.log('Adding manual variant:', manualVariant);
 
       // Create the variant combination
