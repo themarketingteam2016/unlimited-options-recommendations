@@ -918,10 +918,10 @@ export default function ProductEdit() {
 
                         // Fallback if attribute or values not found
                         if (!attr || !attr.attribute_values || attr.attribute_values.length === 0) {
-                          console.warn('No attribute values found for:', opt.attribute.name);
+                          console.warn('No attribute values found for:', opt.attribute?.name || 'Unknown');
                           return (
                             <div key={opt.id} style={{ marginBottom: '8px', padding: '6px', background: '#fff3cd', borderRadius: '4px' }}>
-                              <strong>{opt.attribute.name}:</strong> {opt.attribute_value.value}
+                              <strong>{opt.attribute?.name || 'Unknown'}:</strong> {opt.attribute_value?.value || 'N/A'}
                               <span style={{ fontSize: '11px', color: '#856404', marginLeft: '8px' }}>
                                 (values not loaded)
                               </span>
