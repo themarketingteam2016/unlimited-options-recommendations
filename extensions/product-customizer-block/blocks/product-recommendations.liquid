@@ -503,12 +503,16 @@
 
       try {
         const itemsToAdd = [];
+        const failures = [];
 
         for (const productId of selectedProducts) {
           const variants = productVariantsCache[productId] || [];
+          const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
+          const productName = checkbox?.dataset.productName || 'Product';
 
           if (variants.length === 0) {
             console.warn(`No variants for product ${productId}`);
+            failures.push({ product: productName, reason: 'No variants available' });
             continue;
           }
 
@@ -517,42 +521,67 @@
           // This should not happen now due to validation above
           if (!variantToAdd) {
             console.warn(`No variant selected for product ${productId}`);
+            failures.push({ product: productName, reason: 'No variant selected' });
             continue;
           }
 
           // Check stock
           if (variantToAdd.stock_quantity <= 0) {
-            const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
-            const productName = checkbox?.dataset.productName || 'Product';
-            alert(`${productName} is out of stock`);
+            failures.push({ product: productName, reason: 'Out of stock' });
             continue;
           }
 
           // Prepare variant for cart
-          const apiResponse = await fetch(`${apiUrl}/api/cart/add-variant`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              variantId: variantToAdd.id,
-              quantity: 1
-            })
-          });
+          console.log(`Preparing variant for ${productName}:`, variantToAdd.id);
 
-          if (!apiResponse.ok) {
-            const error = await apiResponse.json();
-            console.error('Failed to prepare variant:', error);
-            continue;
-          }
+          try {
+            const apiResponse = await fetch(`${apiUrl}/api/cart/add-variant`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                variantId: variantToAdd.id,
+                quantity: 1
+              })
+            });
 
-          const apiData = await apiResponse.json();
+            if (!apiResponse.ok) {
+              const error = await apiResponse.json().catch(() => ({ error: 'Unknown error' }));
+              console.error(`Failed to prepare variant for ${productName}:`, error);
+              failures.push({ product: productName, reason: error.error || `API error ${apiResponse.status}` });
+              continue;
+            }
 
-          if (apiData.success && apiData.cartData) {
-            itemsToAdd.push(apiData.cartData);
+            const apiData = await apiResponse.json();
+            console.log(`API response for ${productName}:`, apiData);
+
+            if (apiData.success && apiData.cartData) {
+              itemsToAdd.push(apiData.cartData);
+              console.log(`Successfully prepared ${productName} for cart`);
+            } else if (apiData.fallback) {
+              // Fallback mode - still add it
+              console.log(`Using fallback mode for ${productName}`);
+              failures.push({ product: productName, reason: 'Using fallback mode (Shopify variant limit reached)' });
+            } else {
+              failures.push({ product: productName, reason: 'API returned unsuccessful response' });
+            }
+          } catch (fetchError) {
+            console.error(`Network error for ${productName}:`, fetchError);
+            failures.push({ product: productName, reason: 'Network error' });
           }
         }
 
+        console.log(`Items to add: ${itemsToAdd.length}, Failures: ${failures.length}`);
+
         if (itemsToAdd.length === 0) {
-          throw new Error('No items could be added. Please check product availability.');
+          const failureDetails = failures.map(f => `• ${f.product}: ${f.reason}`).join('\n');
+          throw new Error(`Could not add any items to cart:\n\n${failureDetails}`);
+        }
+
+        // Show warnings if some items failed but others succeeded
+        if (failures.length > 0) {
+          console.warn('Some items could not be added:', failures);
+          const failureMsg = failures.map(f => `• ${f.product}: ${f.reason}`).join('\n');
+          alert(`Warning: Some items could not be added:\n\n${failureMsg}\n\nAdding ${itemsToAdd.length} item(s) to cart...`);
         }
 
         // Add all items to cart in one request
