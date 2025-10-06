@@ -14,63 +14,64 @@ async function recommendationsHandler(req, res) {
 
   try {
     // Get internal product ID from shopify_product_id
-    const { data: product } = await supabaseAdmin
+    const { data: product, error: productError } = await supabaseAdmin
       .from('products')
       .select('id')
       .eq('shopify_product_id', shopifyProductId)
       .single();
 
+    if (productError) {
+      console.error('Product lookup error:', productError);
+      return res.status(404).json({ error: 'Product not found', details: productError.message });
+    }
+
     if (!product) {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    // Fetch recommendations
+    // Fetch recommendations with full product details
     const { data, error } = await supabaseAdmin
       .from('recommendations')
       .select(`
-        *,
+        id,
+        reason,
         recommended_product:products!recommendations_recommended_product_id_fkey (
+          id,
           shopify_product_id,
+          shopify_handle,
           title,
+          description,
           image_url,
-          featuredImage:featured_image
+          status
         )
       `)
       .eq('product_id', product.id)
-      .limit(2);
+      .order('created_at', { ascending: false })
+      .limit(6);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Recommendations fetch error:', error);
+      throw error;
+    }
 
-    // Fetch basic product info for recommendations from the products API
-    const recommendedProducts = await Promise.all(
-      (data || []).map(async (rec) => {
-        const shopifyId = rec.recommended_product?.shopify_product_id;
-        if (!shopifyId) return null;
+    // Return recommendations with proper structure
+    const recommendations = (data || []).map(rec => ({
+      id: rec.id,
+      reason: rec.reason,
+      recommended_product: {
+        id: rec.recommended_product?.shopify_product_id,
+        shopify_product_id: rec.recommended_product?.shopify_product_id,
+        handle: rec.recommended_product?.shopify_handle,
+        title: rec.recommended_product?.title,
+        description: rec.recommended_product?.description,
+        image_url: rec.recommended_product?.image_url,
+        featuredImage: rec.recommended_product?.image_url ? { url: rec.recommended_product.image_url } : null,
+        status: rec.recommended_product?.status,
+        price: '0.00' // Default price, can be enhanced later
+      }
+    })).filter(rec => rec.recommended_product?.id);
 
-        // Fetch from our products API to get full details
-        try {
-          const productsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/products`);
-          const products = await productsRes.json();
-          const fullProduct = products.find(p => p.id === shopifyId);
-
-          if (fullProduct) {
-            return {
-              ...rec,
-              recommended_product: {
-                ...rec.recommended_product,
-                ...fullProduct
-              }
-            };
-          }
-          return rec;
-        } catch (err) {
-          console.error('Error fetching product details:', err);
-          return rec;
-        }
-      })
-    );
-
-    res.status(200).json(recommendedProducts.filter(p => p !== null));
+    res.status(200).json(recommendations);
   } catch (error) {
     console.error('Failed to fetch recommendations:', error);
     res.status(500).json({ error: error.message });

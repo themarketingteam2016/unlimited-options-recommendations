@@ -25,12 +25,28 @@
 
         // Fetch recommendations
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/recommendations`);
-        const recommendations = await response.json();
 
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('API error:', errorData);
+
+          // Hide the widget if no recommendations or product not found
+          if (response.status === 404) {
+            root.style.display = 'none';
+            return;
+          }
+
+          throw new Error(errorData.error || 'Failed to fetch recommendations');
+        }
+
+        const recommendations = await response.json();
         console.log('Fetched recommendations:', recommendations);
 
         if (!recommendations || recommendations.length === 0) {
-          root.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">No recommendations available.</div>';
+          // Hide the widget if no recommendations
+          root.style.display = 'none';
           return;
         }
 
@@ -38,7 +54,8 @@
 
       } catch (error) {
         console.error('Error loading recommendations:', error);
-        root.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">Unable to load recommendations.</div>';
+        // Hide the widget on error
+        root.style.display = 'none';
       }
     }
 
