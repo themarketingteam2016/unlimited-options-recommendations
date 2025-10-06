@@ -203,12 +203,12 @@ export default function ProductEdit() {
       // Create the variant combination
       const combination = selectedAttrs.map(attrId => {
         const attr = attributes.find(a => a.id === attrId);
-        const value = attr.attribute_values.find(v => v.id === manualVariant[attrId]);
+        const value = attr?.attribute_values?.find(v => v.id === manualVariant[attrId]);
         return {
           attribute_id: attrId,
-          attribute_value_id: value.id,
-          attribute_name: attr.name,
-          value: value.value
+          attribute_value_id: value?.id,
+          attribute_name: attr?.name,
+          value: value?.value
         };
       });
 
@@ -483,8 +483,8 @@ export default function ProductEdit() {
       // Create new combination key
       const combination = updatedOptions.map(opt => {
         const attr = attributes.find(a => a.id === opt.attribute_id);
-        const value = attr.attribute_values.find(v => v.id === opt.attribute_value_id);
-        return `${attr.name}:${value.value}`;
+        const value = attr?.attribute_values?.find(v => v.id === opt.attribute_value_id);
+        return `${attr?.name}:${value?.value}`;
       }).sort().join('|');
 
       const res = await fetch(`/api/variants/update-options?productId=${encodeURIComponent(productId)}`, {
@@ -1001,6 +1001,7 @@ export default function ProductEdit() {
                       .filter(k => selectedAttributes[k])
                       .map(attrId => {
                         const attr = attributes.find(a => a.id === attrId);
+                        if (!attr) return null;
                         return (
                           <div key={attrId} className={styles.formGroup}>
                             <label>{attr.name}</label>
