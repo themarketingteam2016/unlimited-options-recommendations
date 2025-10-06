@@ -1,6 +1,7 @@
 api_version = "2024-01"
 
 [[extensions]]
+uid = "4d77d4c8-6b60-7aac-7e19-abe67d0e3cf2ad52b15a"
 type = "theme"
 name = "Product Options Customizer"
 handle = "product-options-customizer"

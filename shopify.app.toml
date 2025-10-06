@@ -7,7 +7,6 @@ embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [app_proxy]
 url = "https://unlimtited-options-recommendations.vercel.app"
@@ -27,5 +26,4 @@ redirect_urls = [
   "https://example.com/api/auth"
 ]
 
-[extension_directories]
-extensions = "./extensions"
+extension_directories = ["./extensions"]
