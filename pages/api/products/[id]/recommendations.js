@@ -4,16 +4,25 @@ import { handleCors } from '../../../../lib/cors';
 async function recommendationsHandler(req, res) {
   const { id: shopifyProductId } = req.query;
 
+  console.log('[Recommendations API] Request received:', {
+    shopifyProductId,
+    method: req.method,
+    url: req.url
+  });
+
   if (!shopifyProductId) {
+    console.error('[Recommendations API] No product ID provided');
     return res.status(400).json({ error: 'Product ID is required' });
   }
 
   if (req.method !== 'GET') {
+    console.error('[Recommendations API] Invalid method:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     // Get internal product ID from shopify_product_id
+    console.log('[Recommendations API] Looking up product:', shopifyProductId);
     const { data: product, error: productError } = await supabaseAdmin
       .from('products')
       .select('id')
@@ -21,13 +30,16 @@ async function recommendationsHandler(req, res) {
       .single();
 
     if (productError) {
-      console.error('Product lookup error:', productError);
+      console.error('[Recommendations API] Product lookup error:', productError);
       return res.status(404).json({ error: 'Product not found', details: productError.message });
     }
 
     if (!product) {
+      console.error('[Recommendations API] Product not found in database');
       return res.status(404).json({ error: 'Product not found' });
     }
+
+    console.log('[Recommendations API] Found product ID:', product.id);
 
     // Fetch recommendations with full product details
     const { data, error } = await supabaseAdmin
@@ -50,9 +62,11 @@ async function recommendationsHandler(req, res) {
       .limit(6);
 
     if (error) {
-      console.error('Recommendations fetch error:', error);
+      console.error('[Recommendations API] Recommendations fetch error:', error);
       throw error;
     }
+
+    console.log('[Recommendations API] Fetched recommendations:', { count: (data || []).length });
 
     // Return recommendations with proper structure
     const recommendations = (data || []).map(rec => ({
@@ -72,10 +86,11 @@ async function recommendationsHandler(req, res) {
       }
     })).filter(rec => rec.recommended_product?.id);
 
-    res.status(200).json(recommendations);
+    console.log('[Recommendations API] Returning recommendations:', { count: recommendations.length });
+    return res.status(200).json(recommendations);
   } catch (error) {
-    console.error('Failed to fetch recommendations:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[Recommendations API] Failed to fetch recommendations:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
 
