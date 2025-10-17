@@ -78,7 +78,6 @@
             <div class="unlimited-option" data-attribute-id="${attr.id}">
               <label class="unlimited-option__label">
                 ${attr.name}
-                ${attr.is_primary ? '<span class="unlimited-badge">Primary</span>' : ''}
               </label>
 
               <select class="unlimited-option__select" data-attribute-id="${attr.id}">
@@ -97,20 +96,10 @@
 
         <div class="unlimited-customizer__variant-info" style="display: none;">
           <div class="unlimited-variant-price"></div>
-          <div class="unlimited-variant-stock"></div>
           <div class="unlimited-variant-sku" style="display: none;"></div>
         </div>
 
         <div class="unlimited-customizer__actions">
-          <div class="unlimited-quantity">
-            <label>Quantity:</label>
-            <div class="unlimited-quantity__controls">
-              <button type="button" class="unlimited-qty-btn unlimited-qty-minus" disabled>−</button>
-              <input type="number" class="unlimited-qty-input" value="1" min="1" disabled>
-              <button type="button" class="unlimited-qty-btn unlimited-qty-plus" disabled>+</button>
-            </div>
-          </div>
-
           <button type="button" class="unlimited-add-to-cart btn" disabled>
             Select All Options
           </button>
@@ -154,27 +143,6 @@
       });
     });
 
-    // Quantity controls
-    const qtyMinus = container.querySelector('.unlimited-qty-minus');
-    const qtyPlus = container.querySelector('.unlimited-qty-plus');
-    const qtyInput = container.querySelector('.unlimited-qty-input');
-
-    qtyMinus.addEventListener('click', () => {
-      const value = parseInt(qtyInput.value);
-      if (value > 1) {
-        qtyInput.value = value - 1;
-      }
-    });
-
-    qtyPlus.addEventListener('click', () => {
-      const value = parseInt(qtyInput.value);
-      qtyInput.value = value + 1;
-    });
-
-    qtyInput.addEventListener('change', function() {
-      if (this.value < 1) this.value = 1;
-    });
-
     // Add to cart button
     const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
     addToCartBtn.addEventListener('click', addToCart);
@@ -183,10 +151,8 @@
   function updateVariant() {
     const variantInfo = container.querySelector('.unlimited-customizer__variant-info');
     const priceEl = container.querySelector('.unlimited-variant-price');
-    const stockEl = container.querySelector('.unlimited-variant-stock');
     const skuEl = container.querySelector('.unlimited-variant-sku');
     const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
-    const qtyControls = container.querySelectorAll('.unlimited-qty-btn, .unlimited-qty-input');
 
     // Check if all options selected
     const allSelected = attributes.every(attr => selectedOptions[attr.id]);
@@ -205,44 +171,30 @@
         // Show variant info
         variantInfo.style.display = 'block';
         priceEl.innerHTML = `<strong>Price:</strong> $${selectedVariant.price}`;
-        stockEl.innerHTML = selectedVariant.stock_quantity > 0
-          ? `<strong>Stock:</strong> ${selectedVariant.stock_quantity} available`
-          : '<strong>Out of Stock</strong>';
 
         if (selectedVariant.sku) {
           skuEl.innerHTML = `<strong>SKU:</strong> ${selectedVariant.sku}`;
           skuEl.style.display = 'block';
         }
 
-        // Enable/disable add to cart
-        if (selectedVariant.stock_quantity > 0) {
-          addToCartBtn.disabled = false;
-          addToCartBtn.textContent = 'Add to Cart';
-          qtyControls.forEach(el => el.disabled = false);
-        } else {
-          addToCartBtn.disabled = true;
-          addToCartBtn.textContent = 'Out of Stock';
-          qtyControls.forEach(el => el.disabled = true);
-        }
+        // Enable add to cart
+        addToCartBtn.disabled = false;
+        addToCartBtn.textContent = 'Add to Cart';
       } else {
         variantInfo.style.display = 'none';
         addToCartBtn.disabled = true;
         addToCartBtn.textContent = 'Variant Not Available';
-        qtyControls.forEach(el => el.disabled = true);
       }
     } else {
       variantInfo.style.display = 'none';
       addToCartBtn.disabled = true;
       addToCartBtn.textContent = 'Select All Options';
-      qtyControls.forEach(el => el.disabled = true);
     }
   }
 
   async function addToCart() {
     if (!selectedVariant) return;
 
-    const qtyInput = container.querySelector('.unlimited-qty-input');
-    const quantity = parseInt(qtyInput.value) || 1;
     const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
 
     // Disable button during request
@@ -254,7 +206,7 @@
       const formData = {
         items: [{
           id: selectedVariant.shopify_variant_id || selectedVariant.id,
-          quantity: quantity
+          quantity: 1
         }]
       };
 
@@ -342,16 +294,6 @@
   color: #333;
 }
 
-.unlimited-badge {
-  display: inline-block;
-  background: #008060;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  margin-left: 6px;
-}
-
 .unlimited-option__select {
   width: 100%;
   padding: 12px;
@@ -393,12 +335,6 @@
   margin-bottom: 8px;
 }
 
-.unlimited-variant-stock {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 5px;
-}
-
 .unlimited-variant-sku {
   font-size: 12px;
   color: #999;
@@ -408,58 +344,6 @@
   display: flex;
   gap: 20px;
   align-items: center;
-}
-
-.unlimited-quantity {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.unlimited-quantity label {
-  font-weight: 600;
-}
-
-.unlimited-quantity__controls {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.unlimited-qty-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: #f5f5f5;
-  cursor: pointer;
-  font-size: 18px;
-  transition: background 0.2s;
-}
-
-.unlimited-qty-btn:hover:not(:disabled) {
-  background: #e5e5e5;
-}
-
-.unlimited-qty-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.unlimited-qty-input {
-  width: 50px;
-  height: 36px;
-  border: none;
-  border-left: 1px solid #ccc;
-  border-right: 1px solid #ccc;
-  text-align: center;
-  font-size: 14px;
-}
-
-.unlimited-qty-input:disabled {
-  opacity: 0.5;
 }
 
 .unlimited-add-to-cart {

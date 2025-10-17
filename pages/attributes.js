@@ -10,7 +10,7 @@ export default function Attributes() {
   const [editingAttribute, setEditingAttribute] = useState(null);
   const [formData, setFormData] = useState({ name: '', isPrimary: false });
   const [expandedAttribute, setExpandedAttribute] = useState(null);
-  const [newValue, setNewValue] = useState({ value: '', isDefault: false });
+  const [newValue, setNewValue] = useState({ value: '' });
   const [editingValue, setEditingValue] = useState(null);
   const [message, setMessage] = useState(null);
   const [bulkMode, setBulkMode] = useState({});
@@ -83,15 +83,12 @@ export default function Attributes() {
       const res = await fetch(`/api/attributes/${attributeId}/values`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value: newValue.value,
-          isDefault: newValue.isDefault || false
-        })
+        body: JSON.stringify({ value: newValue.value })
       });
 
       if (res.ok) {
         setMessage({ type: 'success', text: 'Value added successfully!' });
-        setNewValue({ value: '', isDefault: false });
+        setNewValue({ value: '' });
         fetchAttributes();
         setTimeout(() => setMessage(null), 3000);
       }
@@ -138,10 +135,7 @@ export default function Attributes() {
       const res = await fetch(`/api/attributes/values/${editingValue.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value: editingValue.value,
-          isDefault: editingValue.is_default || false
-        })
+        body: JSON.stringify({ value: editingValue.value })
       });
 
       if (res.ok) {
@@ -152,27 +146,6 @@ export default function Attributes() {
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update value' });
-    }
-  };
-
-  const handleToggleDefault = async (valueId, currentValue, isDefault) => {
-    try {
-      const res = await fetch(`/api/attributes/values/${valueId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value: currentValue,
-          isDefault: !isDefault
-        })
-      });
-
-      if (res.ok) {
-        setMessage({ type: 'success', text: isDefault ? 'Default removed' : 'Set as default!' });
-        fetchAttributes();
-        setTimeout(() => setMessage(null), 2000);
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to update default status' });
     }
   };
 
@@ -312,16 +285,8 @@ export default function Attributes() {
                           type="text"
                           placeholder="Value name"
                           value={newValue.value}
-                          onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
+                          onChange={(e) => setNewValue({ value: e.target.value })}
                         />
-                        <label className={styles.defaultCheckboxInline}>
-                          <input
-                            type="checkbox"
-                            checked={newValue.isDefault || false}
-                            onChange={(e) => setNewValue({ ...newValue, isDefault: e.target.checked })}
-                          />
-                          Set as default
-                        </label>
                         <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
                       </div>
                     )}
@@ -336,34 +301,14 @@ export default function Attributes() {
                                 value={editingValue.value}
                                 onChange={(e) => setEditingValue({ ...editingValue, value: e.target.value })}
                               />
-                              <label className={styles.defaultCheckbox}>
-                                <input
-                                  type="checkbox"
-                                  checked={editingValue.is_default || false}
-                                  onChange={(e) => setEditingValue({ ...editingValue, is_default: e.target.checked })}
-                                />
-                                Default
-                              </label>
                               <button onClick={handleUpdateValue} className={styles.btnPrimary}>Save</button>
                               <button onClick={() => setEditingValue(null)} className={styles.btnSecondary}>Cancel</button>
                             </>
                           ) : (
                             <>
-                              <div className={styles.valueInfo}>
-                                <span>{val.value}</span>
-                                {val.is_default && <span className={styles.defaultBadge}>★ Default</span>}
-                              </div>
-                              <div className={styles.valueActions}>
-                                <button
-                                  onClick={() => handleToggleDefault(val.id, val.value, val.is_default)}
-                                  className={val.is_default ? styles.btnDefaultActive : styles.btnDefault}
-                                  title={val.is_default ? 'Remove as default' : 'Set as default'}
-                                >
-                                  {val.is_default ? '★' : '☆'}
-                                </button>
-                                <button onClick={() => setEditingValue(val)} className={styles.btnEdit}>Edit</button>
-                                <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDelete}>×</button>
-                              </div>
+                              <span>{val.value}</span>
+                              <button onClick={() => setEditingValue(val)} className={styles.btnEdit}>Edit</button>
+                              <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDelete}>×</button>
                             </>
                           )}
                         </div>
