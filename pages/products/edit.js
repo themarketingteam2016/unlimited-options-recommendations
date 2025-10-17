@@ -840,19 +840,6 @@ export default function ProductEdit() {
                               <span style={{ fontWeight: isSelected ? '600' : '400' }}>
                                 {val.value}
                                 {isSelected && <span style={{ marginLeft: '6px', color: '#008060' }}>✓</span>}
-                                {isDefault && (
-                                  <span style={{
-                                    marginLeft: '8px',
-                                    background: '#ffd700',
-                                    color: '#000',
-                                    padding: '2px 6px',
-                                    borderRadius: '10px',
-                                    fontSize: '10px',
-                                    fontWeight: '700'
-                                  }}>
-                                    DEFAULT
-                                  </span>
-                                )}
                               </span>
                             </label>
                             <button
