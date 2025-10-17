@@ -850,14 +850,14 @@ export default function ProductEdit() {
                                 background: 'none',
                                 border: 'none',
                                 cursor: 'pointer',
-                                fontSize: '18px',
+                                fontSize: '20px',
                                 padding: '0 4px',
-                                opacity: defaultValues[attr.id] === val.id ? 1 : 0.3,
-                                transition: 'opacity 0.2s'
+                                color: defaultValues[attr.id] === val.id ? '#ffd700' : '#c9cccf',
+                                transition: 'color 0.2s'
                               }}
                               title={defaultValues[attr.id] === val.id ? 'Remove as default' : 'Set as default'}
                             >
-                              ⭐
+                              {defaultValues[attr.id] === val.id ? '★' : '☆'}
                             </button>
                           </div>
 
