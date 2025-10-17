@@ -58,7 +58,8 @@ async function variantsHandler(req, res) {
           attribute_value:attribute_values (
             id,
             value,
-            image_url
+            image_url,
+            is_default
           )
         )
       `)
