@@ -71,9 +71,10 @@
         for (const rec of recommendations) {
           const product = rec.recommended_product;
           if (product && product.shopify_product_id) {
-            await fetchProductVariants(product.shopify_product_id, product.id);
+            const handle = product.handle || product.shopify_handle;
+            await fetchProductVariants(product.shopify_product_id, product.id, handle);
             productDataCache[product.id] = {
-              handle: product.handle || product.shopify_handle,
+              handle: handle,
               shopify_product_id: product.shopify_product_id
             };
           }
@@ -84,7 +85,7 @@
       }
     }
 
-    async function fetchProductVariants(shopifyProductId, internalProductId) {
+    async function fetchProductVariants(shopifyProductId, internalProductId, productHandle) {
       try {
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
         if (response.ok) {
@@ -92,14 +93,22 @@
 
           // Also fetch Shopify product to get first variant ID for fallback mode
           let shopifyFallbackVariantId = null;
-          try {
-            const shopifyResponse = await fetch(`/products/${shopifyProductId.split('/').pop()}.js`);
-            if (shopifyResponse.ok) {
-              const shopifyProduct = await shopifyResponse.json();
-              shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+          if (productHandle) {
+            try {
+              console.log(`[Recommendation] Fetching Shopify product for fallback: /products/${productHandle}.js`);
+              const shopifyResponse = await fetch(`/products/${productHandle}.js`);
+              if (shopifyResponse.ok) {
+                const shopifyProduct = await shopifyResponse.json();
+                shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+                console.log(`[Recommendation] Fallback variant ID for ${productHandle}:`, shopifyFallbackVariantId);
+              } else {
+                console.warn(`[Recommendation] Failed to fetch product ${productHandle}:`, shopifyResponse.status);
+              }
+            } catch (e) {
+              console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
             }
-          } catch (e) {
-            console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
+          } else {
+            console.warn('[Recommendation] No product handle provided for fallback variant fetch');
           }
 
           recommendationVariantsCache[internalProductId] = {
