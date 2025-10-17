@@ -1186,11 +1186,14 @@ export default function ProductEdit() {
                           selectedValuesForAttr.includes(String(val.id))
                         ) || [];
 
+                        // Get default value for this attribute
+                        const defaultValueId = defaultValues[attrIdStr] || '';
+
                         return (
                           <div key={attrId} className={styles.formGroup}>
                             <label>{attr.name}</label>
                             <select
-                              value={manualVariant[attrId] || ''}
+                              value={manualVariant[attrId] || defaultValueId}
                               onChange={(e) => setManualVariant({ ...manualVariant, [attrId]: e.target.value })}
                               className={styles.formSelect}
                             >
