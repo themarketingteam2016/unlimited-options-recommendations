@@ -79,9 +79,12 @@ export default function ProductEdit() {
       const defaultVals = {};
       if (Array.isArray(attrsData)) {
         attrsData.forEach(attr => {
+          console.log(`Checking attribute ${attr.name} (${attr.id}) for defaults:`, attr.attribute_values);
           attr.attribute_values?.forEach(val => {
+            console.log(`  - Value: ${val.value} (${val.id}), is_default:`, val.is_default);
             if (val.is_default) {
               defaultVals[String(attr.id)] = String(val.id);
+              console.log(`    ✓ Set as default!`);
             }
           });
         });
@@ -642,22 +645,27 @@ export default function ProductEdit() {
 
   const handleToggleDefault = async (attributeId, valueId) => {
     try {
+      // Ensure string conversion for consistent comparison
+      const attrIdStr = String(attributeId);
+      const valueIdStr = String(valueId);
+
       // Find the attribute value to get its current name
-      const attr = attributes.find(a => a.id === attributeId);
-      const value = attr?.attribute_values?.find(v => v.id === valueId);
+      const attr = attributes.find(a => String(a.id) === attrIdStr);
+      const value = attr?.attribute_values?.find(v => String(v.id) === valueIdStr);
 
       if (!value) {
         console.error('Value not found for', valueId);
         return;
       }
 
-      // Check if this value is already default
-      const isCurrentlyDefault = defaultValues[attributeId] === valueId;
+      // Check if this value is already default (with string comparison)
+      const isCurrentlyDefault = defaultValues[attrIdStr] === valueIdStr;
 
       console.log('Toggling default:', {
-        attributeId,
-        valueId,
+        attributeId: attrIdStr,
+        valueId: valueIdStr,
         currentValue: value.value,
+        currentDefaultValues: defaultValues,
         isCurrentlyDefault,
         newDefaultState: !isCurrentlyDefault
       });
@@ -687,7 +695,9 @@ export default function ProductEdit() {
       setTimeout(() => setMessage(null), 2000);
 
       // Refresh all data to get the updated defaults
+      console.log('Refreshing data after toggle...');
       await fetchData();
+      console.log('Data refreshed, new defaultValues:', defaultValues);
     } catch (error) {
       console.error('Toggle default error:', error);
       setMessage({ type: 'error', text: `Failed to update: ${error.message}` });
