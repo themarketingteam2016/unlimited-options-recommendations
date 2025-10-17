@@ -768,12 +768,6 @@ export default function ProductEdit() {
           >
             Product Recommendations
           </button>
-          <button
-            className={`${styles.tab} ${activeTab === 'embed' ? styles.active : ''}`}
-            onClick={() => setActiveTab('embed')}
-          >
-            Embed Code
-          </button>
         </div>
 
         {/* Attributes & Values Tab */}
@@ -1253,89 +1247,6 @@ export default function ProductEdit() {
         </div>
         </div>
         {/* End Product Recommendations Tab */}
-
-        {/* Embed Code Tab */}
-        <div className={`${styles.tabContent} ${activeTab === 'embed' ? styles.active : ''}`}>
-        <div className={styles.section}>
-          <h2>Embed Product Customizer</h2>
-          <p className={styles.subtitle}>Copy and paste this code into your website to embed the product customizer</p>
-
-          <div className={styles.embedSection}>
-            <h3>Embed Code</h3>
-            <p style={{ color: '#6d7175', fontSize: '14px', marginBottom: '12px' }}>
-              Add this iframe code to your website where you want the product customizer to appear:
-            </p>
-
-            <div className={styles.codeBlock}>
-              <code>{`<iframe
-  src="${typeof window !== 'undefined' ? window.location.origin : ''}/embed/${encodeURIComponent(productId)}"
-  width="100%"
-  height="700"
-  frameborder="0"
-  style="max-width: 500px; border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-</iframe>`}</code>
-            </div>
-
-            <button
-              className={styles.copyButton}
-              onClick={() => {
-                const embedCode = `<iframe src="${typeof window !== 'undefined' ? window.location.origin : ''}/embed/${encodeURIComponent(productId)}" width="100%" height="700" frameborder="0" style="max-width: 500px; border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></iframe>`;
-                navigator.clipboard.writeText(embedCode);
-                setMessage({ type: 'success', text: 'Embed code copied to clipboard!' });
-                setTimeout(() => setMessage(null), 3000);
-              }}
-            >
-              📋 Copy Embed Code
-            </button>
-
-            <div className={styles.embedPreview} style={{ marginTop: '30px' }}>
-              <h3>Preview</h3>
-              <p style={{ color: '#6d7175', fontSize: '14px', marginBottom: '12px' }}>
-                This is how the customizer will look when embedded:
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '20px', background: '#f6f6f7', borderRadius: '8px' }}>
-                <iframe
-                  src={`/embed/${encodeURIComponent(productId)}`}
-                  width="100%"
-                  height="700"
-                  frameBorder="0"
-                  style={{ maxWidth: '500px', border: 'none', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                />
-              </div>
-            </div>
-
-            <div className={styles.embedInstructions} style={{ marginTop: '30px', padding: '20px', background: '#f6f6f7', borderRadius: '8px' }}>
-              <h3>Integration Instructions</h3>
-              <ol style={{ paddingLeft: '20px', color: '#202223', lineHeight: '1.8' }}>
-                <li>Copy the embed code above</li>
-                <li>Paste it into your website's HTML where you want the customizer to appear</li>
-                <li>Adjust the width and height attributes if needed</li>
-                <li>The customizer will communicate with your parent page via postMessage when items are added to cart</li>
-              </ol>
-
-              <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Listening to Add to Cart Events</h4>
-              <p style={{ color: '#6d7175', fontSize: '14px', marginBottom: '12px' }}>
-                Add this JavaScript to your page to handle add to cart events:
-              </p>
-              <div className={styles.codeBlock}>
-                <code>{`<script>
-  window.addEventListener('message', function(event) {
-    if (event.data.type === 'ADD_TO_CART') {
-      // event.data.variant - The selected variant
-      // event.data.quantity - Selected quantity
-      // event.data.product - Product details
-
-      // Add your Shopify cart logic here
-      console.log('Add to cart:', event.data);
-    }
-  });
-</script>`}</code>
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-        {/* End Embed Code Tab */}
       </main>
     </div>
   );
