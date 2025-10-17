@@ -89,21 +89,37 @@
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
         if (response.ok) {
           const variants = await response.json();
+
+          // Also fetch Shopify product to get first variant ID for fallback mode
+          let shopifyFallbackVariantId = null;
+          try {
+            const shopifyResponse = await fetch(`/products/${shopifyProductId.split('/').pop()}.js`);
+            if (shopifyResponse.ok) {
+              const shopifyProduct = await shopifyResponse.json();
+              shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+            }
+          } catch (e) {
+            console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
+          }
+
           recommendationVariantsCache[internalProductId] = {
             variants: variants || [],
-            shopifyProductId: shopifyProductId
+            shopifyProductId: shopifyProductId,
+            shopifyFallbackVariantId: shopifyFallbackVariantId
           };
         } else {
           recommendationVariantsCache[internalProductId] = {
             variants: [],
-            shopifyProductId: shopifyProductId
+            shopifyProductId: shopifyProductId,
+            shopifyFallbackVariantId: null
           };
         }
       } catch (error) {
         console.error('Error fetching variants:', error);
         recommendationVariantsCache[internalProductId] = {
           variants: [],
-          shopifyProductId: shopifyProductId
+          shopifyProductId: shopifyProductId,
+          shopifyFallbackVariantId: null
         };
       }
     }
@@ -622,7 +638,36 @@
                     console.log('[Bundle Add] Added recommendation to cart items:', recApiData.cartData);
                   } else if (recApiData.fallback) {
                     // Handle fallback mode for recommendations
-                    recommendationErrors.push(`Recommendation ${productId} in fallback mode - not supported yet`);
+                    console.log('[Bundle Add] Using fallback mode for recommendation');
+
+                    const cachedData = recommendationVariantsCache[productId];
+                    const fallbackVariantId = cachedData?.shopifyFallbackVariantId;
+
+                    if (fallbackVariantId) {
+                      const properties = {
+                        '_Custom_Variant': 'Yes',
+                        '_SKU': recApiData.variant.sku || 'Custom',
+                        '_Price': `$${recApiData.variant.price}`
+                      };
+
+                      recApiData.variant.options?.forEach(opt => {
+                        properties[opt.name] = opt.value;
+                      });
+
+                      itemsToAdd.push({
+                        id: fallbackVariantId,
+                        quantity: 1,
+                        properties: properties
+                      });
+
+                      console.log('[Bundle Add] Added recommendation in fallback mode:', {
+                        id: fallbackVariantId,
+                        properties: properties
+                      });
+                    } else {
+                      console.error('[Bundle Add] No fallback variant ID available for recommendation');
+                      recommendationErrors.push(`Recommendation ${productId}: No fallback variant ID`);
+                    }
                   }
                 } else {
                   const recError = await recApiResponse.json();
@@ -689,6 +734,12 @@
           selectedRecommendations.clear();
           const checkboxes = root.querySelectorAll('.unlimited-recommendation-checkbox');
           checkboxes.forEach(cb => cb.checked = false);
+
+          // Hide bundle preview
+          const bundlePreview = root.querySelector('.unlimited-bundle-preview');
+          if (bundlePreview) {
+            bundlePreview.style.display = 'none';
+          }
 
           // Trigger multiple cart update events to ensure refresh
           document.dispatchEvent(new CustomEvent('cart:updated'));

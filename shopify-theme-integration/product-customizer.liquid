@@ -109,21 +109,37 @@
       const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
       if (response.ok) {
         const variants = await response.json();
+
+        // Also fetch Shopify product to get first variant ID for fallback mode
+        let shopifyFallbackVariantId = null;
+        try {
+          const shopifyResponse = await fetch(`/products/${shopifyProductId.split('/').pop()}.js`);
+          if (shopifyResponse.ok) {
+            const shopifyProduct = await shopifyResponse.json();
+            shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+          }
+        } catch (e) {
+          console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
+        }
+
         recommendationVariantsCache[internalProductId] = {
           variants: variants || [],
-          shopifyProductId: shopifyProductId
+          shopifyProductId: shopifyProductId,
+          shopifyFallbackVariantId: shopifyFallbackVariantId
         };
       } else {
         recommendationVariantsCache[internalProductId] = {
           variants: [],
-          shopifyProductId: shopifyProductId
+          shopifyProductId: shopifyProductId,
+          shopifyFallbackVariantId: null
         };
       }
     } catch (error) {
       console.error('Error fetching variants:', error);
       recommendationVariantsCache[internalProductId] = {
         variants: [],
-        shopifyProductId: shopifyProductId
+        shopifyProductId: shopifyProductId,
+        shopifyFallbackVariantId: null
       };
     }
   }
@@ -752,6 +768,12 @@
       selectedRecommendations.clear();
       const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
       checkboxes.forEach(cb => cb.checked = false);
+
+      // Hide bundle preview
+      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+      if (bundlePreview) {
+        bundlePreview.style.display = 'none';
+      }
 
       // Trigger multiple cart update events to ensure refresh
       document.dispatchEvent(new CustomEvent('cart:updated'));
