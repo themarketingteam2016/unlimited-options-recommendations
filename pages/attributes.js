@@ -10,7 +10,7 @@ export default function Attributes() {
   const [editingAttribute, setEditingAttribute] = useState(null);
   const [formData, setFormData] = useState({ name: '', isPrimary: false });
   const [expandedAttribute, setExpandedAttribute] = useState(null);
-  const [newValue, setNewValue] = useState({ value: '' });
+  const [newValue, setNewValue] = useState({ value: '', isDefault: false });
   const [editingValue, setEditingValue] = useState(null);
   const [message, setMessage] = useState(null);
   const [bulkMode, setBulkMode] = useState({});
@@ -312,8 +312,16 @@ export default function Attributes() {
                           type="text"
                           placeholder="Value name"
                           value={newValue.value}
-                          onChange={(e) => setNewValue({ value: e.target.value })}
+                          onChange={(e) => setNewValue({ ...newValue, value: e.target.value })}
                         />
+                        <label className={styles.defaultCheckboxInline}>
+                          <input
+                            type="checkbox"
+                            checked={newValue.isDefault || false}
+                            onChange={(e) => setNewValue({ ...newValue, isDefault: e.target.checked })}
+                          />
+                          Set as default
+                        </label>
                         <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
                       </div>
                     )}

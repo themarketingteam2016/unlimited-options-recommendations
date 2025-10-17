@@ -433,24 +433,6 @@ export default function ProductEdit() {
           setMessage({ type: 'success', text: 'Variants updated successfully!' });
           await fetchVariants();
         }
-      } else if (bulkAction === 'stock') {
-        const updatedVariants = variants
-          .filter(v => selectedVariants.includes(v.id))
-          .map(v => ({
-            ...v,
-            stock_quantity: parseInt(bulkValue) || 0
-          }));
-
-        const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ variants: updatedVariants })
-        });
-
-        if (res.ok) {
-          setMessage({ type: 'success', text: 'Stock updated successfully!' });
-          await fetchVariants();
-        }
       }
 
       setBulkAction('');
@@ -915,17 +897,15 @@ export default function ProductEdit() {
                   <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
                     <option value="">Bulk Actions</option>
                     <option value="price">Set Price</option>
-                    <option value="stock">Set Stock</option>
                     <option value="delete">Delete</option>
                   </select>
-                  {(bulkAction === 'price' || bulkAction === 'stock') && (
+                  {bulkAction === 'price' && (
                     <input
                       type="number"
-                      placeholder={bulkAction === 'stock' ? 'Stock Quantity' : 'Price'}
+                      placeholder="Price"
                       value={bulkValue}
                       onChange={e => setBulkValue(e.target.value)}
-                      min={bulkAction === 'stock' ? '0' : undefined}
-                      step={bulkAction === 'price' ? '0.01' : '1'}
+                      step="0.01"
                     />
                   )}
                   <button className={styles.btnSecondary} onClick={handleBulkAction}>
@@ -949,7 +929,6 @@ export default function ProductEdit() {
                   <th style={{ width: '100px' }}>Image</th>
                   <th>Options</th>
                   <th style={{ width: '100px' }}>Price</th>
-                  <th style={{ width: '100px' }}>Stock</th>
                   <th style={{ width: '120px' }}>SKU</th>
                   <th style={{ width: '80px' }}>Action</th>
                 </tr>
@@ -1068,15 +1047,6 @@ export default function ProductEdit() {
                         value={variant.price || ''}
                         onChange={e => handleVariantUpdate(variant.id, 'price', parseFloat(e.target.value))}
                         style={{ width: '90px' }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={variant.stock_quantity || 0}
-                        onChange={e => handleVariantUpdate(variant.id, 'stock_quantity', parseInt(e.target.value) || 0)}
-                        style={{ width: '90px' }}
-                        min="0"
                       />
                     </td>
                     <td>

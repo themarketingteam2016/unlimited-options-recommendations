@@ -38,6 +38,7 @@
 
     let selectedProducts = new Set();
     let productVariantsCache = {};
+    let productDataCache = {}; // Store product handles and other data
     let selectedVariants = {};
     let mainProduct = null;
 
@@ -60,6 +61,12 @@
           handle: '{{ product.handle }}'
         };
 
+        // Cache main product data
+        productDataCache['main-product'] = {
+          handle: '{{ product.handle }}',
+          shopify_product_id: productId
+        };
+
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/recommendations`);
 
         if (!response.ok) {
@@ -77,11 +84,16 @@
           return;
         }
 
-        // Fetch variants for each recommended product
+        // Fetch variants and cache product data for each recommended product
         for (const rec of recommendations) {
           const product = rec.recommended_product;
           if (product && product.shopify_product_id) {
             await fetchProductVariants(product.shopify_product_id, product.id);
+            // Cache product data
+            productDataCache[product.id] = {
+              handle: product.handle || product.shopify_handle,
+              shopify_product_id: product.shopify_product_id
+            };
           }
         }
 
@@ -105,6 +117,34 @@
       } catch (error) {
         console.error('Error fetching variants:', error);
         productVariantsCache[internalProductId] = [];
+      }
+    }
+
+    async function getDefaultVariantId(internalProductId) {
+      try {
+        // Get product handle from cache
+        const productInfo = productDataCache[internalProductId];
+        if (!productInfo || !productInfo.handle) {
+          console.error('No product handle found for', internalProductId);
+          return null;
+        }
+
+        console.log(`Fetching default variant for ${internalProductId}, handle: ${productInfo.handle}`);
+
+        // Fetch the product from Shopify to get its default variant
+        const response = await fetch(`/products/${productInfo.handle}.js`);
+        if (response.ok) {
+          const productData = await response.json();
+          // Return the first variant ID (default variant)
+          if (productData.variants && productData.variants.length > 0) {
+            console.log(`Found default variant ID: ${productData.variants[0].id}`);
+            return productData.variants[0].id;
+          }
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching default variant:', error);
+        return null;
       }
     }
 
@@ -557,10 +597,39 @@
             if (apiData.success && apiData.cartData) {
               itemsToAdd.push(apiData.cartData);
               console.log(`Successfully prepared ${productName} for cart`);
-            } else if (apiData.fallback) {
-              // Fallback mode - still add it
-              console.log(`Using fallback mode for ${productName}`);
-              failures.push({ product: productName, reason: 'Using fallback mode (Shopify variant limit reached)' });
+            } else if (apiData.fallback && apiData.variant) {
+              // Fallback mode - use default variant with line item properties
+              console.log(`Using fallback mode for ${productName}`, apiData.variant);
+
+              // Get the product's default/first variant ID from Shopify using internal product ID
+              const fallbackVariantId = await getDefaultVariantId(productId);
+
+              if (fallbackVariantId) {
+                // Build properties from variant options
+                const properties = {};
+                if (apiData.variant.options && Array.isArray(apiData.variant.options)) {
+                  apiData.variant.options.forEach(opt => {
+                    properties[opt.name] = opt.value;
+                  });
+                }
+
+                if (apiData.variant.sku) {
+                  properties['_SKU'] = apiData.variant.sku;
+                }
+
+                properties['_Custom_Variant'] = 'Yes';
+                properties['_Price'] = String(apiData.variant.price);
+
+                itemsToAdd.push({
+                  id: fallbackVariantId,
+                  quantity: 1,
+                  properties: properties
+                });
+
+                console.log(`Added ${productName} using fallback mode with properties`, properties);
+              } else {
+                failures.push({ product: productName, reason: 'Could not find default variant for fallback' });
+              }
             } else {
               failures.push({ product: productName, reason: 'API returned unsuccessful response' });
             }

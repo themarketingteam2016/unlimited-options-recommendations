@@ -171,7 +171,6 @@ export default function Storefront() {
                   <div key={attr.id} className={styles.optionGroup}>
                     <label>
                       {attr.name}
-                      {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                     </label>
                     <select
                       className={styles.dropdown}
@@ -204,23 +203,14 @@ export default function Storefront() {
             {selectedVariant && (
               <div className={styles.priceSection}>
                 <div className={styles.price}>${selectedVariant.price}</div>
-                <div className={styles.stock}>
-                  {selectedVariant.stock_quantity > 0
-                    ? `In Stock: ${selectedVariant.stock_quantity}`
-                    : 'Out of Stock'}
-                </div>
               </div>
             )}
 
             <button
               className={styles.addToCartButton}
-              disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
+              disabled={!selectedVariant}
             >
-              {selectedVariant
-                ? selectedVariant.stock_quantity > 0
-                  ? 'Add to Cart'
-                  : 'Out of Stock'
-                : 'Select Options'}
+              {selectedVariant ? 'Add to Cart' : 'Select Options'}
             </button>
           </div>
         </div>

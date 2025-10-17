@@ -80,7 +80,6 @@
       });
 
       let selectedVariant = null;
-      let quantity = 1;
 
       // Create HTML structure
       const html = `
@@ -90,7 +89,6 @@
               <div class="unlimited-option-group" data-attribute-id="${attr.id}">
                 <label class="unlimited-option-label">
                   ${attr.name}
-                  ${attr.is_primary ? '<span class="unlimited-badge">Primary</span>' : ''}
                 </label>
                 <select class="unlimited-dropdown" data-attribute-id="${attr.id}">
                   <option value="">Choose ${attr.name}</option>
@@ -106,16 +104,6 @@
 
             <div class="unlimited-price-section" style="display: none;">
               <div class="unlimited-price"></div>
-              <div class="unlimited-stock"></div>
-            </div>
-
-            <div class="unlimited-quantity-section">
-              <label>Quantity:</label>
-              <div class="unlimited-quantity-control">
-                <button type="button" class="unlimited-qty-btn unlimited-qty-minus">-</button>
-                <input type="number" class="unlimited-qty-input" value="1" min="1">
-                <button type="button" class="unlimited-qty-btn unlimited-qty-plus">+</button>
-              </div>
             </div>
 
             <button type="button" class="unlimited-add-to-cart" disabled>
@@ -178,24 +166,6 @@
         });
       });
 
-      // Quantity controls
-      root.querySelector('.unlimited-qty-minus').addEventListener('click', () => {
-        const input = root.querySelector('.unlimited-qty-input');
-        quantity = Math.max(1, parseInt(input.value) - 1);
-        input.value = quantity;
-      });
-
-      root.querySelector('.unlimited-qty-plus').addEventListener('click', () => {
-        const input = root.querySelector('.unlimited-qty-input');
-        quantity = parseInt(input.value) + 1;
-        input.value = quantity;
-      });
-
-      root.querySelector('.unlimited-qty-input').addEventListener('change', function() {
-        quantity = Math.max(1, parseInt(this.value) || 1);
-        this.value = quantity;
-      });
-
       // Add to cart button
       root.querySelector('.unlimited-add-to-cart').addEventListener('click', async () => {
         if (!selectedVariant) return;
@@ -212,7 +182,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               variantId: selectedVariant.id,
-              quantity: quantity
+              quantity: 1
             })
           });
 
@@ -254,7 +224,7 @@
               body: JSON.stringify({
                 items: [{
                   id: productVariantId,
-                  quantity: quantity,
+                  quantity: 1,
                   properties: properties
                 }]
               })
@@ -318,7 +288,6 @@
         // Update UI
         const priceSection = root.querySelector('.unlimited-price-section');
         const priceEl = root.querySelector('.unlimited-price');
-        const stockEl = root.querySelector('.unlimited-stock');
         const skuEl = root.querySelector('.unlimited-sku');
         const addToCartBtn = root.querySelector('.unlimited-add-to-cart');
 
@@ -327,22 +296,14 @@
         if (selectedVariant) {
           priceSection.style.display = 'flex';
           priceEl.textContent = `$${selectedVariant.price}`;
-          stockEl.textContent = selectedVariant.stock_quantity > 0
-            ? `In Stock: ${selectedVariant.stock_quantity}`
-            : 'Out of Stock';
 
           if (selectedVariant.sku) {
             skuEl.textContent = `SKU: ${selectedVariant.sku}`;
             skuEl.style.display = 'block';
           }
 
-          if (selectedVariant.stock_quantity > 0) {
-            addToCartBtn.disabled = false;
-            addToCartBtn.textContent = 'Add to Cart';
-          } else {
-            addToCartBtn.disabled = true;
-            addToCartBtn.textContent = 'Out of Stock';
-          }
+          addToCartBtn.disabled = false;
+          addToCartBtn.textContent = 'Add to Cart';
         } else {
           if (allSelected) {
             addToCartBtn.textContent = 'Variant Not Available';
@@ -453,64 +414,6 @@
     color: #008060;
   }
 
-  .unlimited-stock {
-    font-size: 13px;
-    color: #6d7175;
-  }
-
-  .unlimited-quantity-section {
-    margin: 20px 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .unlimited-quantity-section label {
-    font-weight: 600;
-    color: #202223;
-    font-size: 14px;
-  }
-
-  .unlimited-quantity-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .unlimited-qty-btn {
-    width: 36px;
-    height: 36px;
-    border: 2px solid #c9cccf;
-    border-radius: 6px;
-    background: white;
-    color: #202223;
-    font-size: 18px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .unlimited-qty-btn:hover {
-    border-color: #008060;
-    color: #008060;
-  }
-
-  .unlimited-qty-input {
-    width: 60px;
-    height: 36px;
-    border: 2px solid #c9cccf;
-    border-radius: 6px;
-    text-align: center;
-    font-size: 14px;
-    font-weight: 600;
-    color: #202223;
-  }
-
-  .unlimited-qty-input:focus {
-    outline: none;
-    border-color: #008060;
-  }
-
   .unlimited-add-to-cart {
     width: 100%;
     padding: 14px 20px;
@@ -548,12 +451,6 @@
   "name": "Product Customizer",
   "target": "section",
   "settings": [
-    {
-      "type": "checkbox",
-      "id": "show_quantity",
-      "label": "Show quantity selector",
-      "default": true
-    },
     {
       "type": "checkbox",
       "id": "show_sku",

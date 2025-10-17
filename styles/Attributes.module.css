@@ -203,14 +203,32 @@
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+  align-items: center;
 }
 
-.addValueForm input {
+.addValueForm input[type="text"] {
   flex: 1;
   padding: 10px;
   border: 1px solid #c9cccf;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.defaultCheckboxInline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #202223;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.defaultCheckboxInline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #ffd700;
 }
 
 .valuesList {

@@ -16,7 +16,6 @@ export default function EmbedWidget() {
   const [selectedOptions, setSelectedOptions] = useState({});
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     if (id) {
@@ -132,13 +131,13 @@ export default function EmbedWidget() {
       window.parent.postMessage({
         type: 'ADD_TO_CART',
         variant: selectedVariant,
-        quantity: quantity,
+        quantity: 1,
         product: product
       }, '*');
     }
 
     // Also trigger Shopify add to cart if available
-    alert(`Added ${quantity} × ${product.title} to cart!\nVariant ID: ${selectedVariant.id}\nPrice: $${selectedVariant.price}`);
+    alert(`Added ${product.title} to cart!\nVariant ID: ${selectedVariant.id}\nPrice: $${selectedVariant.price}`);
   };
 
   if (loading) {
@@ -150,7 +149,7 @@ export default function EmbedWidget() {
   }
 
   const allOptionsSelected = attributes.every(attr => selectedOptions[attr.id]);
-  const canAddToCart = allOptionsSelected && selectedVariant && selectedVariant.stock_quantity > 0;
+  const canAddToCart = allOptionsSelected && selectedVariant;
 
   return (
     <div className={styles.widget}>
@@ -167,7 +166,6 @@ export default function EmbedWidget() {
               <div key={attr.id} className={styles.optionGroup}>
                 <label className={styles.optionLabel}>
                   {attr.name}
-                  {attr.is_primary && <span className={styles.badge}>Primary</span>}
                 </label>
                 <select
                   className={styles.dropdown}
@@ -200,41 +198,8 @@ export default function EmbedWidget() {
         {selectedVariant && (
           <div className={styles.priceSection}>
             <div className={styles.price}>${selectedVariant.price}</div>
-            <div className={styles.stock}>
-              {selectedVariant.stock_quantity > 0
-                ? `In Stock: ${selectedVariant.stock_quantity}`
-                : 'Out of Stock'}
-            </div>
           </div>
         )}
-
-        <div className={styles.quantitySection}>
-          <label>Quantity:</label>
-          <div className={styles.quantityControl}>
-            <button
-              className={styles.quantityBtn}
-              onClick={() => setQuantity(Math.max(1, quantity - 1))}
-              disabled={!canAddToCart}
-            >
-              -
-            </button>
-            <input
-              type="number"
-              className={styles.quantityInput}
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              min="1"
-              disabled={!canAddToCart}
-            />
-            <button
-              className={styles.quantityBtn}
-              onClick={() => setQuantity(quantity + 1)}
-              disabled={!canAddToCart}
-            >
-              +
-            </button>
-          </div>
-        </div>
 
         <button
           className={styles.addToCartBtn}
@@ -245,8 +210,6 @@ export default function EmbedWidget() {
             ? 'Select All Options'
             : !selectedVariant
             ? 'Variant Not Available'
-            : selectedVariant.stock_quantity === 0
-            ? 'Out of Stock'
             : 'Add to Cart'}
         </button>
 
