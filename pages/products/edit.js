@@ -852,8 +852,8 @@ export default function ProductEdit() {
                                 cursor: 'pointer',
                                 fontSize: '20px',
                                 padding: '0 4px',
-                                color: defaultValues[attr.id] === val.id ? '#ffd700' : '#c9cccf',
-                                transition: 'color 0.2s'
+                                color: '#ffd700',
+                                transition: 'all 0.2s'
                               }}
                               title={defaultValues[attr.id] === val.id ? 'Remove as default' : 'Set as default'}
                             >
