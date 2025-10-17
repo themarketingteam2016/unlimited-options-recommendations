@@ -32,6 +32,7 @@ export default function ProductEdit() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('attributes');
+  const [defaultValues, setDefaultValues] = useState({});
 
   useEffect(() => {
     if (productId) {
@@ -73,6 +74,19 @@ export default function ProductEdit() {
       }
 
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
+
+      // Track default values from attributes
+      const defaultVals = {};
+      if (Array.isArray(attrsData)) {
+        attrsData.forEach(attr => {
+          attr.attribute_values?.forEach(val => {
+            if (val.is_default) {
+              defaultVals[attr.id] = val.id;
+            }
+          });
+        });
+      }
+      setDefaultValues(defaultVals);
 
       // Fetch all products
       const productsRes = await fetch('/api/products');
@@ -625,6 +639,50 @@ export default function ProductEdit() {
     reader.readAsDataURL(file);
   };
 
+  const handleToggleDefault = async (attributeId, valueId) => {
+    try {
+      // Find the attribute value to get its current name
+      const attr = attributes.find(a => a.id === attributeId);
+      const value = attr?.attribute_values?.find(v => v.id === valueId);
+
+      if (!value) return;
+
+      // Check if this value is already default
+      const isCurrentlyDefault = defaultValues[attributeId] === valueId;
+
+      // Update the default value
+      const res = await fetch(`/api/attributes/values/${valueId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          value: value.value,
+          isDefault: !isCurrentlyDefault
+        })
+      });
+
+      if (res.ok) {
+        // Update local state
+        setDefaultValues(prev => ({
+          ...prev,
+          [attributeId]: isCurrentlyDefault ? null : valueId
+        }));
+
+        setMessage({
+          type: 'success',
+          text: isCurrentlyDefault ? 'Default removed' : 'Set as default!'
+        });
+        setTimeout(() => setMessage(null), 2000);
+
+        // Refresh attributes to get updated data
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Toggle default error:', error);
+      setMessage({ type: 'error', text: 'Failed to update default' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   const handleSaveRecommendations = async () => {
     try {
       setIsSaving(true);
@@ -764,8 +822,39 @@ export default function ProductEdit() {
                               <span style={{ fontWeight: isSelected ? '600' : '400' }}>
                                 {val.value}
                                 {isSelected && <span style={{ marginLeft: '6px', color: '#008060' }}>✓</span>}
+                                {defaultValues[attr.id] === val.id && (
+                                  <span style={{
+                                    marginLeft: '8px',
+                                    background: '#ffd700',
+                                    color: '#000',
+                                    padding: '2px 6px',
+                                    borderRadius: '10px',
+                                    fontSize: '10px',
+                                    fontWeight: '700'
+                                  }}>
+                                    DEFAULT
+                                  </span>
+                                )}
                               </span>
                             </label>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleDefault(attr.id, val.id);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '18px',
+                                padding: '0 4px',
+                                opacity: defaultValues[attr.id] === val.id ? 1 : 0.3,
+                                transition: 'opacity 0.2s'
+                              }}
+                              title={defaultValues[attr.id] === val.id ? 'Remove as default' : 'Set as default'}
+                            >
+                              ⭐
+                            </button>
                           </div>
 
                           {/* Show image upload only when value is selected */}
