@@ -1,6 +1,8 @@
 {% comment %}
   Product Recommendations Bundle Widget
   Displays recommended products with multi-select and bulk add to cart
+
+  IMPORTANT: Position this block ABOVE the "Add to Cart" button in your theme for best UX
 {% endcomment %}
 
 <div id="unlimited-recommendations-{{ block.id }}" class="unlimited-recommendations" {{ block.shopify_attributes }}>
@@ -40,7 +42,6 @@
     let productVariantsCache = {};
     let productDataCache = {}; // Store product handles and other data
     let selectedVariants = {};
-    let mainProduct = null;
 
     // Show loading state
     root.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">Loading recommendations...</div>';
@@ -48,24 +49,6 @@
     async function loadRecommendations() {
       try {
         console.log('Loading recommendations for product:', productId);
-
-        // Fetch main product variants first
-        await fetchProductVariants(productId, 'main-product');
-
-        // Store main product info
-        mainProduct = {
-          id: 'main-product',
-          shopify_product_id: productId,
-          title: '{{ product.title }}',
-          image_url: '{{ product.featured_image | img_url: "medium" }}',
-          handle: '{{ product.handle }}'
-        };
-
-        // Cache main product data
-        productDataCache['main-product'] = {
-          handle: '{{ product.handle }}',
-          shopify_product_id: productId
-        };
 
         const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/recommendations`);
 
@@ -159,59 +142,15 @@
     }
 
     function renderRecommendations(recommendations) {
-      const mainProductStartingPrice = getStartingPrice('main-product');
-      const hasMainVariants = (productVariantsCache['main-product'] || []).length > 0;
-
       const html = `
         <div class="unlimited-recommendations-widget">
           <div class="unlimited-bundle-header">
-            <div class="unlimited-header-left">
-              <h3 class="unlimited-recommendations-title">Complete Your Bundle</h3>
-              <p class="unlimited-recommendations-subtitle">Select products and add them together</p>
-            </div>
-            <div class="unlimited-select-all-container">
-              <label class="unlimited-select-all-label">
-                <input type="checkbox" id="select-all-${blockId}" class="unlimited-select-all-checkbox">
-                <span>Select All</span>
-              </label>
-            </div>
+            <h3 class="unlimited-recommendations-title">You May Also Like</h3>
+            <p class="unlimited-recommendations-subtitle">Select products to add them to your bundle</p>
           </div>
 
           <div class="unlimited-recommendations-grid">
-            <!-- Main Product Card -->
-            <div class="unlimited-recommendation-card unlimited-main-product-card" data-product-id="main-product">
-              <div class="unlimited-main-badge">Current Product</div>
-              <div class="unlimited-recommendation-checkbox">
-                <input
-                  type="checkbox"
-                  id="product-main-product"
-                  class="unlimited-product-checkbox"
-                  data-product-id="main-product"
-                  data-product-name="${mainProduct.title}"
-                  data-has-variants="${hasMainVariants}"
-                >
-                <label for="product-main-product"></label>
-              </div>
-
-              <a href="/products/${mainProduct.handle}" class="unlimited-recommendation-link">
-                ${mainProduct.image_url ? `
-                  <div class="unlimited-recommendation-image">
-                    <img src="${mainProduct.image_url}" alt="${mainProduct.title}" loading="lazy">
-                  </div>
-                ` : ''}
-                <div class="unlimited-recommendation-details">
-                  <h4 class="unlimited-recommendation-product-title">${mainProduct.title}</h4>
-                  <div class="unlimited-recommendation-price">
-                    ${mainProductStartingPrice ? `
-                      <span class="unlimited-price-label">Starting from</span>
-                      <span class="unlimited-price-value">$${mainProductStartingPrice}</span>
-                    ` : `<span class="unlimited-price-value">Select options</span>`}
-                  </div>
-                </div>
-              </a>
-            </div>
-
-            <!-- Recommended Products -->
+            <!-- Recommended Products Only (Main product removed) -->
             ${recommendations.map(rec => {
               const product = rec.recommended_product;
               if (!product) return '';
@@ -260,15 +199,11 @@
           </div>
 
           <div class="unlimited-bundle-actions">
-            <div class="unlimited-selected-count">
-              <span id="selected-count-${blockId}">0</span> product(s) selected
-            </div>
             <button
               class="unlimited-bulk-add-btn"
               id="bulk-add-btn-${blockId}"
-              disabled
             >
-              Add Selected to Cart
+              Add to Cart
             </button>
           </div>
         </div>
@@ -286,12 +221,6 @@
       checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', handleCheckboxChange);
       });
-
-      // Select All checkbox
-      const selectAllCheckbox = document.getElementById(`select-all-${blockId}`);
-      if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', handleSelectAll);
-      }
 
       // Bulk add button
       const bulkBtn = document.getElementById(`bulk-add-btn-${blockId}`);
@@ -311,25 +240,6 @@
       if (confirmBtn) confirmBtn.addEventListener('click', confirmBulkAdd);
     }
 
-    function handleSelectAll(e) {
-      const checkboxes = root.querySelectorAll('.unlimited-product-checkbox');
-      const isChecked = e.target.checked;
-
-      checkboxes.forEach(checkbox => {
-        checkbox.checked = isChecked;
-        const productId = checkbox.dataset.productId;
-
-        if (isChecked) {
-          selectedProducts.add(productId);
-        } else {
-          selectedProducts.delete(productId);
-          delete selectedVariants[productId];
-        }
-      });
-
-      updateSelectedCount();
-    }
-
     function handleCheckboxChange(e) {
       const productId = e.target.dataset.productId;
 
@@ -340,33 +250,18 @@
         delete selectedVariants[productId];
       }
 
-      updateSelectedCount();
-      updateSelectAllCheckbox();
+      updateButtonText();
     }
 
-    function updateSelectAllCheckbox() {
-      const selectAllCheckbox = document.getElementById(`select-all-${blockId}`);
-      const checkboxes = root.querySelectorAll('.unlimited-product-checkbox');
-
-      if (!selectAllCheckbox || checkboxes.length === 0) return;
-
-      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-      const someChecked = Array.from(checkboxes).some(cb => cb.checked);
-
-      selectAllCheckbox.checked = allChecked;
-      selectAllCheckbox.indeterminate = someChecked && !allChecked;
-    }
-
-    function updateSelectedCount() {
-      const countEl = document.getElementById(`selected-count-${blockId}`);
+    function updateButtonText() {
       const bulkBtn = document.getElementById(`bulk-add-btn-${blockId}`);
 
-      if (countEl) {
-        countEl.textContent = selectedProducts.size;
-      }
-
       if (bulkBtn) {
-        bulkBtn.disabled = selectedProducts.size === 0;
+        if (selectedProducts.size === 0) {
+          bulkBtn.textContent = 'Add to Cart';
+        } else {
+          bulkBtn.textContent = 'Add Bundle to Cart';
+        }
       }
     }
 
@@ -388,7 +283,91 @@
       }
     }
 
+    // Get selected attribute values from main product customizer
+    function getMainProductSelections() {
+      const mainCustomizer = document.querySelector('.unlimited-customizer');
+      if (!mainCustomizer) return {};
+
+      const selections = {};
+      const selects = mainCustomizer.querySelectorAll('.unlimited-option__select');
+
+      selects.forEach(select => {
+        const attrId = select.dataset.attributeId;
+        const valueId = select.value;
+
+        if (attrId && valueId) {
+          // Also get the attribute name and value text for matching
+          const attrName = select.closest('.unlimited-option')?.querySelector('.unlimited-option__label')?.textContent?.trim();
+          const valueText = select.options[select.selectedIndex]?.text;
+
+          selections[attrId] = {
+            valueId: valueId,
+            attrName: attrName || '',
+            valueText: valueText || ''
+          };
+        }
+      });
+
+      console.log('Main product selections:', selections);
+      return selections;
+    }
+
+    // Find matching or nearest attribute value
+    function findMatchingValue(mainSelection, availableValues) {
+      if (!mainSelection || !availableValues || availableValues.length === 0) {
+        return null;
+      }
+
+      // First try: Exact match by value text (case-insensitive)
+      const exactMatch = availableValues.find(v =>
+        v.value.toLowerCase() === mainSelection.valueText.toLowerCase()
+      );
+      if (exactMatch) {
+        console.log(`Exact match found: ${exactMatch.value}`);
+        return exactMatch.id;
+      }
+
+      // Second try: Partial match (contains)
+      const partialMatch = availableValues.find(v =>
+        v.value.toLowerCase().includes(mainSelection.valueText.toLowerCase()) ||
+        mainSelection.valueText.toLowerCase().includes(v.value.toLowerCase())
+      );
+      if (partialMatch) {
+        console.log(`Partial match found: ${partialMatch.value}`);
+        return partialMatch.id;
+      }
+
+      // Third try: For numeric values, find nearest (e.g., carat weight)
+      const mainValue = parseFloat(mainSelection.valueText);
+      if (!isNaN(mainValue)) {
+        const numericValues = availableValues
+          .map(v => ({ ...v, numeric: parseFloat(v.value) }))
+          .filter(v => !isNaN(v.numeric));
+
+        if (numericValues.length > 0) {
+          const nearest = numericValues.reduce((prev, curr) =>
+            Math.abs(curr.numeric - mainValue) < Math.abs(prev.numeric - mainValue) ? curr : prev
+          );
+          console.log(`Nearest numeric match found: ${nearest.value}`);
+          return nearest.id;
+        }
+      }
+
+      // No match found - return first available or default
+      const defaultValue = availableValues.find(v => v.is_default);
+      if (defaultValue) {
+        console.log(`Using default value: ${defaultValue.value}`);
+        return defaultValue.id;
+      }
+
+      console.log('No match found, returning null');
+      return null;
+    }
+
     function showVariantModal(productIds) {
+      // Get main product selections for smart pre-fill
+      const mainSelections = getMainProductSelections();
+
       const instructionText = productIds.length > 1
         ? `Please select options for all ${productIds.length} products in your bundle.`
         : 'Please select options for this product.';
@@ -396,6 +375,11 @@
       const modalContent = `
         <div class="unlimited-modal-instruction">
           <p>${instructionText}</p>
+          ${Object.keys(mainSelections).length > 0 ? `
+            <p style="color: #008060; font-weight: 600; margin-top: 8px;">
+              ✓ Pre-filled with your selections from the main product
+            </p>
+          ` : ''}
         </div>
         ${productIds.map(productId => {
           const variants = productVariantsCache[productId] || [];
@@ -410,17 +394,29 @@
             <div class="unlimited-product-variant-section" data-product-id="${productId}">
               <h4 class="unlimited-variant-product-name">${productName}</h4>
 
-              ${attributes.map(attr => `
-                <div class="unlimited-variant-option-group">
-                  <label class="unlimited-variant-label">${attr.name} <span class="unlimited-required">*</span></label>
-                  <select class="unlimited-variant-select" data-product-id="${productId}" data-attribute-id="${attr.id}" required>
-                    <option value="">Choose ${attr.name}</option>
-                    ${attr.values.map(value => `
-                      <option value="${value.id}">${value.value}</option>
-                    `).join('')}
-                  </select>
-                </div>
-              `).join('')}
+              ${attributes.map(attr => {
+                // Try to find matching value from main product
+                const matchedValueId = Object.values(mainSelections).find(sel =>
+                  sel.attrName && attr.name &&
+                  sel.attrName.toLowerCase() === attr.name.toLowerCase()
+                )?.valueText;
+
+                const preSelectedValue = matchedValueId
+                  ? findMatchingValue({ valueText: matchedValueId }, attr.values)
+                  : (attr.values.find(v => v.is_default)?.id || '');
+
+                return `
+                  <div class="unlimited-variant-option-group">
+                    <label class="unlimited-variant-label">${attr.name} <span class="unlimited-required">*</span></label>
+                    <select class="unlimited-variant-select" data-product-id="${productId}" data-attribute-id="${attr.id}" required>
+                      <option value="">Choose ${attr.name}</option>
+                      ${attr.values.map(value => `
+                        <option value="${value.id}" ${value.id === preSelectedValue ? 'selected' : ''}>${value.value}</option>
+                      `).join('')}
+                    </select>
+                  </div>
+                `;
+              }).join('')}
 
               <div class="unlimited-variant-preview" style="display: none;">
                 <div class="unlimited-variant-price"></div>
@@ -437,6 +433,10 @@
       const selects = modalBody.querySelectorAll('.unlimited-variant-select');
       selects.forEach(select => {
         select.addEventListener('change', handleVariantSelection);
+        // Trigger initial selection to show preview if pre-filled
+        if (select.value) {
+          select.dispatchEvent(new Event('change'));
+        }
       });
 
       // Show modal
@@ -726,81 +726,21 @@
   }
 
   .unlimited-bundle-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
-    padding: 20px;
-    background: #f6f6f7;
-    border-radius: 8px;
-  }
-
-  .unlimited-header-left {
-    flex: 1;
+    margin-bottom: 24px;
+    text-align: center;
   }
 
   .unlimited-recommendations-title {
     font-size: 28px;
     font-weight: 700;
     color: #202223;
-    margin-bottom: 4px;
-    text-align: left;
+    margin-bottom: 8px;
   }
 
   .unlimited-recommendations-subtitle {
     font-size: 14px;
     color: #6d7175;
-    text-align: left;
     margin: 0;
-  }
-
-  .unlimited-select-all-container {
-    display: flex;
-    align-items: center;
-  }
-
-  .unlimited-select-all-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
-    color: #202223;
-    padding: 12px 20px;
-    background: white;
-    border-radius: 6px;
-    border: 2px solid #c9cccf;
-    transition: all 0.2s;
-  }
-
-  .unlimited-select-all-label:hover {
-    border-color: #008060;
-    background: #f9fafb;
-  }
-
-  .unlimited-select-all-checkbox {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    accent-color: #008060;
-  }
-
-  @media (max-width: 768px) {
-    .unlimited-bundle-header {
-      flex-direction: column;
-      gap: 16px;
-      align-items: flex-start;
-    }
-
-    .unlimited-select-all-container {
-      width: 100%;
-    }
-
-    .unlimited-select-all-label {
-      width: 100%;
-      justify-content: center;
-    }
   }
 
   .unlimited-recommendations-grid {
@@ -831,28 +771,6 @@
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
     transform: translateY(-4px);
     border-color: #008060;
-  }
-
-  .unlimited-main-product-card {
-    border-color: #008060;
-    border-width: 3px;
-    background: linear-gradient(135deg, #ffffff 0%, #f0fdf9 100%);
-  }
-
-  .unlimited-main-badge {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: linear-gradient(135deg, #008060 0%, #006e52 100%);
-    color: white;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    z-index: 10;
-    box-shadow: 0 2px 8px rgba(0, 128, 96, 0.3);
   }
 
   .unlimited-recommendation-checkbox {
@@ -944,48 +862,31 @@
 
   .unlimited-bundle-actions {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    padding: 20px;
-    background: #f6f6f7;
-    border-radius: 8px;
+    padding: 24px 0;
     margin-top: 24px;
   }
 
-  .unlimited-selected-count {
-    font-size: 16px;
-    font-weight: 600;
-    color: #202223;
-  }
-
-  .unlimited-selected-count span {
-    color: #008060;
-    font-size: 20px;
-  }
-
   .unlimited-bulk-add-btn {
-    padding: 14px 32px;
+    padding: 16px 48px;
     border: none;
     background: #008060;
     color: white;
     font-size: 16px;
-    font-weight: 600;
-    border-radius: 6px;
+    font-weight: 700;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 12px rgba(0, 128, 96, 0.3);
   }
 
-  .unlimited-bulk-add-btn:hover:not(:disabled) {
+  .unlimited-bulk-add-btn:hover {
     background: #006e52;
     transform: translateY(-2px);
-  }
-
-  .unlimited-bulk-add-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: #6d7175;
+    box-shadow: 0 6px 20px rgba(0, 128, 96, 0.4);
   }
 
   /* Modal Styles */
