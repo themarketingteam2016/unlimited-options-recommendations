@@ -553,11 +553,19 @@
           }
 
           // Handle recommendations with smart pre-fill if any selected
+          console.log('[Bundle Add] Checking recommendations...', {
+            selectedRecommendationsSize: selectedRecommendations.size,
+            selectedRecommendations: Array.from(selectedRecommendations)
+          });
+
           if (selectedRecommendations.size > 0) {
             const mainSelections = getMainProductSelections();
+            console.log('[Bundle Add] Processing bundle with recommendations');
             console.log('[Bundle Add] Main selections:', mainSelections);
 
             const recommendationErrors = [];
+
+            console.log('[Bundle Add] About to loop through',  selectedRecommendations.size, 'recommendations');
 
             for (const productId of selectedRecommendations) {
               console.log('[Bundle Add] Processing recommendation:', productId);
