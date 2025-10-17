@@ -334,3 +334,77 @@
   outline: none;
   border-color: #008060;
 }
+
+/* Default value styles */
+.valueInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.defaultBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffd700;
+  color: #654500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.valueActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btnDefault {
+  padding: 4px 8px;
+  border: 1px solid #c9cccf;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  background: white;
+  color: #c9cccf;
+  transition: all 0.2s;
+}
+
+.btnDefault:hover {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: #fffbf0;
+}
+
+.btnDefaultActive {
+  padding: 4px 8px;
+  border: 1px solid #ffd700;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  background: #ffd700;
+  color: #654500;
+  transition: all 0.2s;
+}
+
+.btnDefaultActive:hover {
+  background: #ffed4e;
+}
+
+.defaultCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #202223;
+  white-space: nowrap;
+}
+
+.defaultCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #ffd700;
+}

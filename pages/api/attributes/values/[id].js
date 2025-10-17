@@ -5,16 +5,40 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
-      const { value, imageUrl } = req.body;
+      const { value, imageUrl, isDefault } = req.body;
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+      // Get the attribute_id first
+      const { data: existingValue } = await supabaseAdmin
+        .from('attribute_values')
+        .select('attribute_id')
+        .eq('id', id)
+        .single();
+
+      // If setting as default, first unset any existing default for this attribute
+      if (isDefault && existingValue) {
+        await supabaseAdmin
+          .from('attribute_values')
+          .update({ is_default: false })
+          .eq('attribute_id', existingValue.attribute_id)
+          .eq('is_default', true)
+          .neq('id', id);
+      }
+
+      const updateData = {
+        value,
+        slug,
+        image_url: imageUrl || null
+      };
+
+      // Only update is_default if it's explicitly provided
+      if (typeof isDefault !== 'undefined') {
+        updateData.is_default = isDefault;
+      }
 
       const { data, error } = await supabaseAdmin
         .from('attribute_values')
-        .update({
-          value,
-          slug,
-          image_url: imageUrl || null
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();

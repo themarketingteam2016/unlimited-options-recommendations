@@ -72,7 +72,21 @@ export default function Storefront() {
             }
           });
         });
-        setAttributes(Object.values(uniqueAttrs));
+        const extractedAttributes = Object.values(uniqueAttrs);
+        setAttributes(extractedAttributes);
+
+        // Pre-select default values
+        const defaultOptions = {};
+        extractedAttributes.forEach(attr => {
+          const defaultValue = attr.values.find(v => v.is_default);
+          if (defaultValue) {
+            defaultOptions[attr.id] = defaultValue.id;
+          }
+        });
+        if (Object.keys(defaultOptions).length > 0) {
+          console.log('Storefront - Setting default options:', defaultOptions);
+          setSelectedOptions(defaultOptions);
+        }
       }
 
       setLoading(false);

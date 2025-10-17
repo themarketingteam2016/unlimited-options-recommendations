@@ -70,7 +70,15 @@
     }
 
     function renderCustomizer(variants, attributes) {
+      // Pre-select default values
       let selectedOptions = {};
+      attributes.forEach(attr => {
+        const defaultValue = attr.values.find(v => v.is_default);
+        if (defaultValue) {
+          selectedOptions[attr.id] = defaultValue.id;
+        }
+      });
+
       let selectedVariant = null;
       let quantity = 1;
 
@@ -87,7 +95,7 @@
                 <select class="unlimited-dropdown" data-attribute-id="${attr.id}">
                   <option value="">Choose ${attr.name}</option>
                   ${attr.values.map(value => `
-                    <option value="${value.id}">${value.value}</option>
+                    <option value="${value.id}" ${selectedOptions[attr.id] === value.id ? 'selected' : ''}>${value.value}</option>
                   `).join('')}
                 </select>
                 <div class="unlimited-image-preview" style="display: none;">
@@ -120,6 +128,24 @@
       `;
 
       root.innerHTML = html;
+
+      // Show default value images if available
+      attributes.forEach(attr => {
+        if (selectedOptions[attr.id]) {
+          const value = attr.values.find(v => v.id === selectedOptions[attr.id]);
+          if (value?.image_url) {
+            const optionGroup = root.querySelector(`[data-attribute-id="${attr.id}"]`);
+            const preview = optionGroup.querySelector('.unlimited-image-preview');
+            const previewImg = optionGroup.querySelector('.unlimited-preview-img');
+            previewImg.src = value.image_url;
+            previewImg.alt = value.value;
+            preview.style.display = 'block';
+          }
+        }
+      });
+
+      // Update variant for default selections
+      updateVariant(variants, attributes);
 
       // Add event listeners
       const dropdowns = root.querySelectorAll('.unlimited-dropdown');
