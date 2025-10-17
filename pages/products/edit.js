@@ -81,11 +81,12 @@ export default function ProductEdit() {
         attrsData.forEach(attr => {
           attr.attribute_values?.forEach(val => {
             if (val.is_default) {
-              defaultVals[attr.id] = val.id;
+              defaultVals[String(attr.id)] = String(val.id);
             }
           });
         });
       }
+      console.log('Default values loaded:', defaultVals);
       setDefaultValues(defaultVals);
 
       // Fetch all products
@@ -805,7 +806,10 @@ export default function ProductEdit() {
                   <div className={styles.valuesGrid}>
                     {attr.attribute_values.map(val => {
                       const valIdStr = String(val.id);
+                      const attrIdStr = String(attr.id);
                       const isSelected = selectedValues[attrIdStr]?.includes(valIdStr) || false;
+                      const isDefault = String(defaultValues[attrIdStr]) === valIdStr || val.is_default;
+
                       return (
                         <div
                           key={val.id}
@@ -826,7 +830,7 @@ export default function ProductEdit() {
                               <span style={{ fontWeight: isSelected ? '600' : '400' }}>
                                 {val.value}
                                 {isSelected && <span style={{ marginLeft: '6px', color: '#008060' }}>✓</span>}
-                                {defaultValues[attr.id] === val.id && (
+                                {isDefault && (
                                   <span style={{
                                     marginLeft: '8px',
                                     background: '#ffd700',
@@ -855,9 +859,9 @@ export default function ProductEdit() {
                                 color: '#ffd700',
                                 transition: 'all 0.2s'
                               }}
-                              title={defaultValues[attr.id] === val.id ? 'Remove as default' : 'Set as default'}
+                              title={isDefault ? 'Remove as default' : 'Set as default'}
                             >
-                              {defaultValues[attr.id] === val.id ? '★' : '☆'}
+                              {isDefault ? '★' : '☆'}
                             </button>
                           </div>
 
