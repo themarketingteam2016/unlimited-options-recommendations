@@ -875,31 +875,29 @@ export default function ProductEdit() {
                             </button>
                           </div>
 
-                          {/* Show image upload only when value is selected */}
-                          {isSelected && (
-                            <div className={styles.valueImageSection}>
-                              {(attributeValueImages[val.id] || val.image_url) ? (
-                                <img
-                                  src={attributeValueImages[val.id] || val.image_url}
-                                  alt={val.value}
-                                  className={styles.valueImgLarge}
-                                />
-                              ) : (
-                                <div className={styles.imagePlaceholder}>
-                                  <span>📷</span>
-                                </div>
-                              )}
-                              <label className={styles.uploadButtonSmall}>
-                                {(attributeValueImages[val.id] || val.image_url) ? 'Change' : 'Upload Image'}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleAttributeValueImageUpload(val.id, e)}
-                                  style={{ display: 'none' }}
-                                />
-                              </label>
-                            </div>
-                          )}
+                          {/* Image upload section - always visible */}
+                          <div className={styles.valueImageSection}>
+                            {(attributeValueImages[val.id] || val.image_url) ? (
+                              <img
+                                src={attributeValueImages[val.id] || val.image_url}
+                                alt={val.value}
+                                className={styles.valueImgLarge}
+                              />
+                            ) : (
+                              <div className={styles.imagePlaceholder}>
+                                <span>📷</span>
+                              </div>
+                            )}
+                            <label className={styles.uploadButtonSmall}>
+                              {(attributeValueImages[val.id] || val.image_url) ? 'Change' : 'Upload Image'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleAttributeValueImageUpload(val.id, e)}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                          </div>
                         </div>
                       );
                     })}
