@@ -645,10 +645,21 @@ export default function ProductEdit() {
       const attr = attributes.find(a => a.id === attributeId);
       const value = attr?.attribute_values?.find(v => v.id === valueId);
 
-      if (!value) return;
+      if (!value) {
+        console.error('Value not found for', valueId);
+        return;
+      }
 
       // Check if this value is already default
       const isCurrentlyDefault = defaultValues[attributeId] === valueId;
+
+      console.log('Toggling default:', {
+        attributeId,
+        valueId,
+        currentValue: value.value,
+        isCurrentlyDefault,
+        newDefaultState: !isCurrentlyDefault
+      });
 
       // Update the default value
       const res = await fetch(`/api/attributes/values/${valueId}`, {
@@ -660,25 +671,25 @@ export default function ProductEdit() {
         })
       });
 
-      if (res.ok) {
-        // Update local state
-        setDefaultValues(prev => ({
-          ...prev,
-          [attributeId]: isCurrentlyDefault ? null : valueId
-        }));
-
-        setMessage({
-          type: 'success',
-          text: isCurrentlyDefault ? 'Default removed' : 'Set as default!'
-        });
-        setTimeout(() => setMessage(null), 2000);
-
-        // Refresh attributes to get updated data
-        await fetchData();
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update default');
       }
+
+      const updatedData = await res.json();
+      console.log('Default updated successfully:', updatedData);
+
+      setMessage({
+        type: 'success',
+        text: isCurrentlyDefault ? 'Default removed' : 'Set as default!'
+      });
+      setTimeout(() => setMessage(null), 2000);
+
+      // Refresh all data to get the updated defaults
+      await fetchData();
     } catch (error) {
       console.error('Toggle default error:', error);
-      setMessage({ type: 'error', text: 'Failed to update default' });
+      setMessage({ type: 'error', text: `Failed to update: ${error.message}` });
       setTimeout(() => setMessage(null), 3000);
     }
   };
@@ -788,7 +799,6 @@ export default function ProductEdit() {
                     onChange={() => handleAttributeToggle(attr.id)}
                   />
                   <span style={{ fontSize: '15px' }}>{attr.name}</span>
-                  {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
                 </label>
 
                 {attr.attribute_values?.length > 0 && (
