@@ -1,3 +1,4 @@
+import { withOptionalAuth } from '../../../lib/auth-middleware';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { createVariantOnDemand } from '../../../lib/shopify-variants';
 import { handleCors } from '../../../lib/cors';
@@ -135,6 +136,9 @@ async function addVariantHandler(req, res) {
   }
 }
 
+// Wrap with optional auth first, then CORS
+const authHandler = withOptionalAuth(addVariantHandler);
+
 export default function handler(req, res) {
-  return handleCors(req, res, addVariantHandler);
+  return handleCors(req, res, authHandler);
 }

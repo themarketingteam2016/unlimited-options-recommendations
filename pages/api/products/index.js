@@ -1,12 +1,44 @@
-import { fetchShopifyProductsREST } from '../../../lib/shopify-client';
+import { withAuth } from '../../../lib/auth-middleware';
 import { supabaseAdmin } from '../../../lib/supabase';
-import { handleCors } from '../../../lib/cors';
 
 async function productsHandler(req, res) {
   if (req.method === 'GET') {
     try {
-      // Fetch live products from Shopify
-      const shopifyProducts = await fetchShopifyProductsREST();
+      // Use the authenticated Shopify client from session
+      const { shopifyClient } = req.session;
+
+      // Fetch live products from Shopify using GraphQL
+      const data = await shopifyClient.graphql(`
+        query getProducts {
+          products(first: 250) {
+            edges {
+              node {
+                id
+                title
+                handle
+                description
+                status
+                featuredImage {
+                  url
+                }
+                variants(first: 100) {
+                  edges {
+                    node {
+                      id
+                      title
+                      price
+                      sku
+                      inventoryQuantity
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `);
+
+      const shopifyProducts = data.products.edges.map(edge => edge.node);
 
       // Sync to Supabase
       for (const product of shopifyProducts) {
@@ -34,6 +66,5 @@ async function productsHandler(req, res) {
   }
 }
 
-export default function handler(req, res) {
-  return handleCors(req, res, productsHandler);
-}
+// Export with authentication middleware
+export default withAuth(productsHandler);

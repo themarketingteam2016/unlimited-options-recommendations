@@ -1,5 +1,5 @@
+import { withAuth } from '../../../lib/auth-middleware';
 import { bulkSyncVariantsToShopify } from '../../../lib/shopify-variants';
-import { handleCors } from '../../../lib/cors';
 
 async function syncToShopifyHandler(req, res) {
   if (req.method !== 'POST') {
@@ -28,6 +28,4 @@ async function syncToShopifyHandler(req, res) {
   }
 }
 
-export default function handler(req, res) {
-  return handleCors(req, res, syncToShopifyHandler);
-}
+export default withAuth(syncToShopifyHandler);

@@ -1,6 +1,7 @@
+import { withOptionalAuth } from '../../../lib/auth-middleware';
 import { supabaseAdmin } from '../../../lib/supabase';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { productId: shopifyProductId } = req.query;
 
   if (!shopifyProductId) {
@@ -92,3 +93,5 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
+export default withOptionalAuth(handler);
