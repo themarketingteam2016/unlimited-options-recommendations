@@ -22,8 +22,8 @@ scopes = "read_products,write_products,read_inventory,write_inventory,read_order
 
 [auth]
 redirect_urls = [
-  "https://unlimtited-options-recommendations.vercel.app/api/auth",
-  "https://example.com/api/auth"
+  "https://unlimtited-options-recommendations.vercel.app/api/auth/callback",
+  "https://example.com/api/auth/callback"
 ]
 
 extension_directories = ["./extensions"]
