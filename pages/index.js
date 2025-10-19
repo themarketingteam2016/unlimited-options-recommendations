@@ -13,15 +13,34 @@ export default function Home() {
   const [message, setMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
   const [newOption, setNewOption] = useState({ name: '', value: '' });
+  const [shop, setShop] = useState(null);
 
   useEffect(() => {
-    fetchProducts();
+    // Get shop from URL params
+    const params = new URLSearchParams(window.location.search);
+    const shopParam = params.get('shop');
+    if (shopParam) {
+      setShop(shopParam);
+    }
   }, []);
+
+  useEffect(() => {
+    if (shop) {
+      fetchProducts();
+    }
+  }, [shop]);
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products?v=2');
+      const res = await fetch(`/api/products?v=2&shop=${shop}`);
       const data = await res.json();
+
+      // Check for authentication error
+      if (data.error && data.authUrl) {
+        window.location.href = data.authUrl;
+        return;
+      }
+
       setProducts(Array.isArray(data) ? data : []);
       setLoading(false);
     } catch (error) {
@@ -161,6 +180,15 @@ export default function Home() {
       setMessage({ type: 'error', text: 'Failed to save variants!' });
     }
   };
+
+  if (!shop) {
+    return (
+      <div className={styles.loading}>
+        <p>No shop parameter found.</p>
+        <p>Please install the app from your Shopify admin or visit with ?shop=yourstore.myshopify.com</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className={styles.loading}>Loading products...</div>;
