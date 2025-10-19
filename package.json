@@ -11,6 +11,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@shopify/app-bridge": "^3.7.10",
+    "@shopify/app-bridge-react": "^4.2.7",
     "@shopify/shopify-app-express": "^5.0.8",
     "@shopify/shopify-app-session-storage-sqlite": "^4.0.8",
     "@supabase/supabase-js": "^2.58.0",

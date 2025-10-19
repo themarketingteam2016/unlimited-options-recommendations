@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import Sidebar from '../components/Sidebar';
+import ExitIframe from '../components/ExitIframe';
 import styles from '../styles/Home.module.css';
 
 export default function Home() {
+  const router = useRouter();
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [options, setOptions] = useState([]);
@@ -14,15 +17,18 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('products');
   const [newOption, setNewOption] = useState({ name: '', value: '' });
   const [shop, setShop] = useState(null);
+  const [isEmbedded, setIsEmbedded] = useState(false);
 
   useEffect(() => {
+    // Check if we're in an iframe (embedded app)
+    setIsEmbedded(window.top !== window.self);
+
     // Get shop from URL params
-    const params = new URLSearchParams(window.location.search);
-    const shopParam = params.get('shop');
+    const shopParam = router.query.shop;
     if (shopParam) {
       setShop(shopParam);
     }
-  }, []);
+  }, [router.query]);
 
   useEffect(() => {
     if (shop) {
@@ -37,7 +43,12 @@ export default function Home() {
 
       // Check for authentication error
       if (data.error && data.authUrl) {
-        window.location.href = data.authUrl;
+        // If embedded, we need to redirect the parent window
+        if (isEmbedded) {
+          window.top.location.href = data.authUrl;
+        } else {
+          window.location.href = data.authUrl;
+        }
         return;
       }
 
@@ -180,6 +191,11 @@ export default function Home() {
       setMessage({ type: 'error', text: 'Failed to save variants!' });
     }
   };
+
+  // If embedded and no shop, show ExitIframe to redirect parent
+  if (isEmbedded && !shop) {
+    return <ExitIframe />;
+  }
 
   if (!shop) {
     return (
