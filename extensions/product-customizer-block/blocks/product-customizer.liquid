@@ -804,13 +804,32 @@
                 }
               });
 
-              // Try to open cart drawer
-              const cartDrawer = document.querySelector('cart-drawer, [data-cart-drawer], .cart-drawer, #CartDrawer');
-              if (cartDrawer) {
-                if (cartDrawer.open) {
-                  cartDrawer.open();
-                } else if (cartDrawer.classList) {
-                  cartDrawer.classList.add('active', 'is-open');
+              // Try to open cart drawer - multiple methods for different themes
+              const cartDrawerComponent = document.querySelector('cart-drawer-component');
+              if (cartDrawerComponent) {
+                // For Shopify's cart-drawer-component
+                const dialog = cartDrawerComponent.querySelector('dialog');
+                if (dialog && dialog.showModal) {
+                  dialog.showModal();
+                  console.log('[Bundle Add] Opened cart drawer via showModal');
+                } else {
+                  // Try clicking the cart button to trigger the drawer
+                  const cartButton = document.querySelector('cart-drawer-component button[aria-haspopup="dialog"]');
+                  if (cartButton) {
+                    cartButton.click();
+                    console.log('[Bundle Add] Opened cart drawer via button click');
+                  }
+                }
+              } else {
+                // Fallback for other drawer types
+                const cartDrawer = document.querySelector('cart-drawer, [data-cart-drawer], .cart-drawer, #CartDrawer');
+                if (cartDrawer) {
+                  if (cartDrawer.open) {
+                    cartDrawer.open();
+                  } else if (cartDrawer.classList) {
+                    cartDrawer.classList.add('active', 'is-open');
+                  }
+                  console.log('[Bundle Add] Opened cart drawer via fallback method');
                 }
               }
 

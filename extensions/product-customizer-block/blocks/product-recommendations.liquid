@@ -924,9 +924,51 @@
 
         // Trigger cart update
         document.dispatchEvent(new CustomEvent('cart:updated'));
-        if (typeof window.Shopify !== 'undefined' && window.Shopify.onCartUpdate) {
-          window.Shopify.onCartUpdate();
+        document.dispatchEvent(new CustomEvent('cart:refresh'));
+        document.dispatchEvent(new CustomEvent('cart:changed'));
+        document.dispatchEvent(new CustomEvent('product:added'));
+
+        // jQuery events
+        if (typeof jQuery !== 'undefined') {
+          jQuery(document).trigger('cart.updated');
         }
+
+        if (typeof window.Shopify !== 'undefined') {
+          if (window.Shopify.onCartUpdate) {
+            window.Shopify.onCartUpdate();
+          }
+          if (window.Shopify.onItemAdded) {
+            window.Shopify.onItemAdded();
+          }
+        }
+
+        // Refresh cart and update UI
+        fetch('/cart.js')
+          .then(r => r.json())
+          .then(cart => {
+            // Update cart count
+            const cartCountElements = document.querySelectorAll('[data-cart-count], .cart-count, #CartCount, .cart-link__bubble, .cart-bubble__text-count');
+            cartCountElements.forEach(el => {
+              el.textContent = cart.item_count;
+              if (cart.item_count > 0) {
+                el.style.display = '';
+                el.classList.remove('hidden');
+              }
+            });
+
+            // Open cart drawer
+            const cartDrawerComponent = document.querySelector('cart-drawer-component');
+            if (cartDrawerComponent) {
+              const dialog = cartDrawerComponent.querySelector('dialog');
+              if (dialog && dialog.showModal) {
+                dialog.showModal();
+              } else {
+                const cartButton = document.querySelector('cart-drawer-component button[aria-haspopup="dialog"]');
+                if (cartButton) cartButton.click();
+              }
+            }
+          })
+          .catch(e => console.error('Cart refresh error:', e));
 
       } catch (error) {
         console.error('Error adding bundle to cart:', error);
