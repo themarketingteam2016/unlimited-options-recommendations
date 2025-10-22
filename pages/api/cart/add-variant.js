@@ -66,11 +66,29 @@ async function addVariantHandler(req, res) {
     // Create Shopify variant if it doesn't exist
     if (!shopifyVariantId) {
       console.log('[add-variant] Creating Shopify variant on-demand');
+      console.log('[add-variant] Variant details:', {
+        internalId: variant.id,
+        productId: variant.product?.shopify_product_id,
+        price: variant.price,
+        sku: variant.sku,
+        stock: variant.stock_quantity
+      });
+
       try {
         shopifyVariantId = await createVariantOnDemand(variantId);
-        console.log('[add-variant] Shopify variant created:', shopifyVariantId);
+        console.log('[add-variant] Shopify variant created successfully:', shopifyVariantId);
+
+        // Verify the variant was created
+        if (!shopifyVariantId || shopifyVariantId === 'null' || shopifyVariantId === 'undefined') {
+          throw new Error('Invalid Shopify variant ID returned');
+        }
       } catch (error) {
-        console.error('[add-variant] Failed to create Shopify variant:', error.message);
+        console.error('[add-variant] Failed to create Shopify variant:', {
+          error: error.message,
+          stack: error.stack,
+          variantId: variantId
+        });
+
         // Fallback: return data for client-side cart add with properties
         return res.status(200).json({
           success: false,
