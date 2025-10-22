@@ -761,11 +761,25 @@
           // Trigger multiple cart update events to ensure refresh
           document.dispatchEvent(new CustomEvent('cart:updated'));
           document.dispatchEvent(new CustomEvent('cart:refresh'));
+          document.dispatchEvent(new CustomEvent('cart:changed'));
+
+          // Additional common theme cart events
+          document.dispatchEvent(new CustomEvent('product:added'));
+          document.dispatchEvent(new CustomEvent('ajaxCart:added'));
+
+          // jQuery events (for themes using jQuery)
+          if (typeof jQuery !== 'undefined') {
+            jQuery(document).trigger('cart.updated');
+            jQuery(document).trigger('ajaxCart.added');
+          }
 
           // Trigger Shopify theme cart updates
           if (typeof window.Shopify !== 'undefined') {
             if (window.Shopify.onCartUpdate) {
               window.Shopify.onCartUpdate();
+            }
+            if (window.Shopify.onItemAdded) {
+              window.Shopify.onItemAdded();
             }
           }
 
@@ -774,6 +788,32 @@
             .then(r => r.json())
             .then(cart => {
               document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
+
+              // Update cart count in header/bubble
+              const cartCount = cart.item_count;
+              console.log('[Bundle Add] Cart item count:', cartCount);
+
+              // Try to update cart count elements
+              const cartCountElements = document.querySelectorAll('[data-cart-count], .cart-count, #CartCount, .cart-link__bubble');
+              cartCountElements.forEach(el => {
+                el.textContent = cartCount;
+                if (cartCount > 0) {
+                  el.style.display = '';
+                  el.classList.remove('hidden');
+                  el.classList.add('visible');
+                }
+              });
+
+              // Try to open cart drawer
+              const cartDrawer = document.querySelector('cart-drawer, [data-cart-drawer], .cart-drawer, #CartDrawer');
+              if (cartDrawer) {
+                if (cartDrawer.open) {
+                  cartDrawer.open();
+                } else if (cartDrawer.classList) {
+                  cartDrawer.classList.add('active', 'is-open');
+                }
+              }
+
               console.log('[Bundle Add] Cart refreshed:', cart);
             })
             .catch(e => console.error('[Bundle Add] Cart refresh error:', e));
