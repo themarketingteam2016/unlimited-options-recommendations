@@ -198,6 +198,14 @@
             }).join('')}
           </div>
 
+          <!-- Bundle Items Preview Section (shown when items are selected) -->
+          <div id="bundle-preview-${blockId}" class="unlimited-bundle-preview" style="display: none;">
+            <h3 class="unlimited-bundle-preview-title">Bundle Items (<span id="bundle-count-${blockId}">0</span> products):</h3>
+            <div id="bundle-items-${blockId}" class="unlimited-bundle-items-list">
+              <!-- Dynamic bundle items will be inserted here -->
+            </div>
+          </div>
+
           <div class="unlimited-bundle-actions">
             <button
               class="unlimited-bulk-add-btn"
@@ -245,12 +253,160 @@
 
       if (e.target.checked) {
         selectedProducts.add(productId);
+        // Auto-select variant if there are variants for this product
+        autoSelectVariant(productId);
       } else {
         selectedProducts.delete(productId);
         delete selectedVariants[productId];
       }
 
+      updateBundlePreview();
       updateButtonText();
+    }
+
+    // Auto-select variant based on main product selections
+    function autoSelectVariant(productId) {
+      const variants = productVariantsCache[productId] || [];
+      if (variants.length === 0) return;
+
+      // Get main product selections
+      const mainSelections = getMainProductSelections();
+
+      // Try to find a matching variant
+      const matchedVariant = findBestMatchingVariant(variants, mainSelections);
+
+      if (matchedVariant) {
+        selectedVariants[productId] = matchedVariant;
+        console.log(`Auto-selected variant for product ${productId}:`, matchedVariant);
+      }
+    }
+
+    // Find best matching variant based on main product selections
+    function findBestMatchingVariant(variants, mainSelections) {
+      if (variants.length === 0) return null;
+
+      // Try to find exact match
+      for (const variant of variants) {
+        let matchCount = 0;
+        const totalOptions = variant.variant_options?.length || 0;
+
+        variant.variant_options?.forEach(opt => {
+          const mainSelection = Object.values(mainSelections).find(sel =>
+            sel.attrName && opt.attribute?.name &&
+            sel.attrName.toLowerCase() === opt.attribute.name.toLowerCase()
+          );
+
+          if (mainSelection && mainSelection.valueText) {
+            const optValue = opt.attribute_value?.value || '';
+            if (optValue.toLowerCase() === mainSelection.valueText.toLowerCase()) {
+              matchCount++;
+            }
+          }
+        });
+
+        // If all options match, return this variant
+        if (matchCount === totalOptions && totalOptions > 0) {
+          return variant;
+        }
+      }
+
+      // Return first variant with default values if available
+      const variantWithDefaults = variants.find(v =>
+        v.variant_options?.every(opt => opt.attribute_value?.is_default)
+      );
+
+      return variantWithDefaults || variants[0];
+    }
+
+    function updateBundlePreview() {
+      const bundlePreview = document.getElementById(`bundle-preview-${blockId}`);
+      const bundleItems = document.getElementById(`bundle-items-${blockId}`);
+      const bundleCount = document.getElementById(`bundle-count-${blockId}`);
+
+      if (!bundlePreview || !bundleItems || !bundleCount) return;
+
+      if (selectedProducts.size === 0) {
+        bundlePreview.style.display = 'none';
+        return;
+      }
+
+      bundlePreview.style.display = 'block';
+      bundleCount.textContent = selectedProducts.size;
+
+      // Render bundle items
+      const itemsHTML = Array.from(selectedProducts).map(productId => {
+        const checkbox = root.querySelector(`input[data-product-id="${productId}"]`);
+        const productName = checkbox?.dataset.productName || 'Product';
+        const variant = selectedVariants[productId];
+
+        const optionsHTML = variant?.variant_options?.map(opt => {
+          const attrName = opt.attribute?.name || '';
+          const valueName = opt.attribute_value?.value || '';
+          const matchStatus = checkMatchStatus(productId, opt);
+
+          return `
+            <div class="unlimited-bundle-option ${matchStatus}">
+              <span class="unlimited-option-name">${attrName}:</span>
+              <span class="unlimited-option-value">${valueName}</span>
+              ${matchStatus === 'unlimited-match-exact' ? '<span class="unlimited-match-indicator">✓</span>' : ''}
+              ${matchStatus === 'unlimited-match-nearest' ? '<span class="unlimited-match-indicator">~</span>' : ''}
+            </div>
+          `;
+        }).join('') || '';
+
+        return `
+          <div class="unlimited-bundle-item" data-product-id="${productId}">
+            <div class="unlimited-bundle-item-header">
+              <h4 class="unlimited-bundle-item-name">${productName}</h4>
+              <button class="unlimited-bundle-edit-btn" data-product-id="${productId}">Edit</button>
+            </div>
+            <div class="unlimited-bundle-item-options">
+              ${variant ? optionsHTML : '<p class="unlimited-no-variant">Selected options will be added</p>'}
+            </div>
+            ${variant && variant.price ? `
+              <div class="unlimited-bundle-item-price">$${variant.price}</div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      bundleItems.innerHTML = itemsHTML;
+
+      // Attach edit button listeners
+      const editButtons = bundleItems.querySelectorAll('.unlimited-bundle-edit-btn');
+      editButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const productId = e.target.dataset.productId;
+          showVariantModal([productId]);
+        });
+      });
+    }
+
+    function checkMatchStatus(productId, variantOption) {
+      const mainSelections = getMainProductSelections();
+
+      const mainSelection = Object.values(mainSelections).find(sel =>
+        sel.attrName && variantOption.attribute?.name &&
+        sel.attrName.toLowerCase() === variantOption.attribute.name.toLowerCase()
+      );
+
+      if (!mainSelection) return '';
+
+      const optValue = variantOption.attribute_value?.value || '';
+      const mainValue = mainSelection.valueText || '';
+
+      if (optValue.toLowerCase() === mainValue.toLowerCase()) {
+        return 'unlimited-match-exact';
+      }
+
+      // Check for nearest match (numeric values)
+      const optNumeric = parseFloat(optValue);
+      const mainNumeric = parseFloat(mainValue);
+      if (!isNaN(optNumeric) && !isNaN(mainNumeric)) {
+        return 'unlimited-match-nearest';
+      }
+
+      return 'unlimited-match-default';
     }
 
     function updateButtonText() {
@@ -268,28 +424,38 @@
     function handleBulkAdd() {
       if (selectedProducts.size === 0) return;
 
+      // Show confirmation dialog
+      const itemCount = selectedProducts.size;
+      const confirmation = confirm(
+        `Add ${itemCount} product${itemCount > 1 ? 's' : ''} to your cart?\n\n` +
+        `This will add the selected bundle items with the displayed options.`
+      );
+
+      if (!confirmation) return;
+
       // Check if any selected product has variants
       const productsNeedingVariants = Array.from(selectedProducts).filter(productId => {
         const variants = productVariantsCache[productId] || [];
-        return variants.length > 0;
+        return variants.length > 0 && !selectedVariants[productId];
       });
 
       if (productsNeedingVariants.length > 0) {
         // Show modal for variant selection
         showVariantModal(productsNeedingVariants);
       } else {
-        // No variants needed, add directly
+        // All variants selected, add directly
         confirmBulkAdd();
       }
     }
 
     // Get selected attribute values from main product customizer
     function getMainProductSelections() {
-      const mainCustomizer = document.querySelector('.unlimited-customizer');
+      const mainCustomizer = document.querySelector('.unlimited-options-widget') ||
+                             document.querySelector('.unlimited-customizer');
       if (!mainCustomizer) return {};
 
       const selections = {};
-      const selects = mainCustomizer.querySelectorAll('.unlimited-option__select');
+      const selects = mainCustomizer.querySelectorAll('.unlimited-dropdown, .unlimited-option__select');
 
       selects.forEach(select => {
         const attrId = select.dataset.attributeId;
@@ -297,7 +463,7 @@
 
         if (attrId && valueId) {
           // Also get the attribute name and value text for matching
-          const attrName = select.closest('.unlimited-option')?.querySelector('.unlimited-option__label')?.textContent?.trim();
+          const attrName = select.closest('.unlimited-option-group, .unlimited-option')?.querySelector('.unlimited-option-label, .unlimited-option__label')?.textContent?.trim();
           const valueText = select.options[select.selectedIndex]?.text;
 
           selections[attrId] = {
@@ -310,6 +476,32 @@
 
       console.log('Main product selections:', selections);
       return selections;
+    }
+
+    // Listen for changes in main product customizer
+    function setupMainProductListeners() {
+      const mainCustomizer = document.querySelector('.unlimited-options-widget') ||
+                             document.querySelector('.unlimited-customizer');
+      if (!mainCustomizer) {
+        // Retry after a short delay
+        setTimeout(setupMainProductListeners, 500);
+        return;
+      }
+
+      const selects = mainCustomizer.querySelectorAll('.unlimited-dropdown, .unlimited-option__select');
+
+      selects.forEach(select => {
+        select.addEventListener('change', () => {
+          console.log('Main product option changed, updating bundle items...');
+          // Re-select variants for all selected bundle products
+          selectedProducts.forEach(productId => {
+            autoSelectVariant(productId);
+          });
+          updateBundlePreview();
+        });
+      });
+
+      console.log('Main product listeners set up successfully');
     }
 
     // Find matching or nearest attribute value
@@ -514,6 +706,8 @@
     function closeModal() {
       modal.style.display = 'none';
       document.body.style.overflow = 'auto';
+      // Update bundle preview when modal closes
+      updateBundlePreview();
     }
 
     async function confirmBulkAdd() {
@@ -675,7 +869,8 @@
         const checkboxes = root.querySelectorAll('.unlimited-product-checkbox');
         checkboxes.forEach(cb => cb.checked = false);
 
-        updateSelectedCount();
+        updateBundlePreview();
+        updateButtonText();
 
         // Show success message
         const bulkBtn = document.getElementById(`bulk-add-btn-${blockId}`);
@@ -708,9 +903,13 @@
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', loadRecommendations);
+      document.addEventListener('DOMContentLoaded', () => {
+        loadRecommendations();
+        setupMainProductListeners();
+      });
     } else {
       loadRecommendations();
+      setupMainProductListeners();
     }
   })();
 </script>
@@ -1100,6 +1299,147 @@
   .unlimited-modal-confirm:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* Bundle Preview Styles */
+  .unlimited-bundle-preview {
+    margin-top: 32px;
+    padding: 24px;
+    background: #f6f6f7;
+    border: 2px solid #008060;
+    border-radius: 12px;
+  }
+
+  .unlimited-bundle-preview-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #202223;
+    margin: 0 0 20px 0;
+  }
+
+  .unlimited-bundle-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .unlimited-bundle-item {
+    background: white;
+    border: 1px solid #e3e5e7;
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .unlimited-bundle-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .unlimited-bundle-item-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #202223;
+    margin: 0;
+  }
+
+  .unlimited-bundle-edit-btn {
+    padding: 6px 16px;
+    border: 1px solid #008060;
+    background: white;
+    color: #008060;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .unlimited-bundle-edit-btn:hover {
+    background: #008060;
+    color: white;
+  }
+
+  .unlimited-bundle-item-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .unlimited-bundle-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 8px;
+    background: #f6f6f7;
+    border-radius: 6px;
+    position: relative;
+  }
+
+  .unlimited-option-name {
+    font-weight: 600;
+    color: #6d7175;
+  }
+
+  .unlimited-option-value {
+    color: #202223;
+  }
+
+  .unlimited-match-indicator {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .unlimited-match-exact {
+    background: #e8f5f1;
+    border-left: 3px solid #008060;
+  }
+
+  .unlimited-match-exact .unlimited-match-indicator {
+    color: #008060;
+  }
+
+  .unlimited-match-nearest {
+    background: #fff4e5;
+    border-left: 3px solid #ff9800;
+  }
+
+  .unlimited-match-nearest .unlimited-match-indicator {
+    color: #ff9800;
+  }
+
+  .unlimited-match-default {
+    background: #f6f6f7;
+  }
+
+  .unlimited-bundle-item-price {
+    font-size: 18px;
+    font-weight: 700;
+    color: #008060;
+    text-align: right;
+  }
+
+  .unlimited-no-variant {
+    color: #6d7175;
+    font-size: 13px;
+    font-style: italic;
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .unlimited-bundle-item-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .unlimited-bundle-edit-btn {
+      width: 100%;
+    }
   }
 </style>
 
