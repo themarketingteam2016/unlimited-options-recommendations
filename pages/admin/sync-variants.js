@@ -1,10 +1,20 @@
 import { useState } from 'react';
 
+// List of main products
+const MAIN_PRODUCTS = [
+  { id: 'gid://shopify/Product/9114913341692', name: '3 Stone Rings' },
+  { id: 'gid://shopify/Product/9115330085116', name: 'Earrings' },
+  { id: 'gid://shopify/Product/9115333853436', name: 'Pendant' },
+  // Add other 2 products here if you have their IDs
+];
+
 export default function SyncVariants() {
   const [productId, setProductId] = useState('gid://shopify/Product/9114913341692');
   const [syncing, setSyncing] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [allResults, setAllResults] = useState(null);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -32,6 +42,43 @@ export default function SyncVariants() {
     }
   };
 
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    setAllResults(null);
+    setError(null);
+
+    const results = [];
+
+    for (const product of MAIN_PRODUCTS) {
+      try {
+        const response = await fetch('/api/sync-variants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: product.id })
+        });
+
+        const data = await response.json();
+
+        results.push({
+          productName: product.name,
+          productId: product.id,
+          success: response.ok,
+          data: data
+        });
+      } catch (err) {
+        results.push({
+          productName: product.name,
+          productId: product.id,
+          success: false,
+          error: err.message
+        });
+      }
+    }
+
+    setAllResults(results);
+    setSyncingAll(false);
+  };
+
   return (
     <div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>Sync Variants to Shopify</h1>
@@ -56,23 +103,43 @@ export default function SyncVariants() {
         />
       </div>
 
-      <button
-        onClick={handleSync}
-        disabled={syncing || !productId}
-        style={{
-          marginTop: '16px',
-          padding: '12px 24px',
-          background: syncing ? '#ccc' : '#008060',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          fontSize: '16px',
-          fontWeight: 600,
-          cursor: syncing ? 'not-allowed' : 'pointer'
-        }}
-      >
-        {syncing ? 'Syncing...' : 'Sync Variants'}
-      </button>
+      <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+        <button
+          onClick={handleSync}
+          disabled={syncing || syncingAll || !productId}
+          style={{
+            flex: 1,
+            padding: '12px 24px',
+            background: syncing ? '#ccc' : '#008060',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '16px',
+            fontWeight: 600,
+            cursor: (syncing || syncingAll) ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {syncing ? 'Syncing...' : 'Sync This Product'}
+        </button>
+
+        <button
+          onClick={handleSyncAll}
+          disabled={syncing || syncingAll}
+          style={{
+            flex: 1,
+            padding: '12px 24px',
+            background: syncingAll ? '#ccc' : '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '16px',
+            fontWeight: 600,
+            cursor: (syncing || syncingAll) ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {syncingAll ? 'Syncing All...' : `Sync All ${MAIN_PRODUCTS.length} Products`}
+        </button>
+      </div>
 
       {result && (
         <div style={{
@@ -106,6 +173,47 @@ export default function SyncVariants() {
         </div>
       )}
 
+      {allResults && (
+        <div style={{
+          marginTop: '24px',
+          padding: '16px',
+          background: '#f6f6f7',
+          border: '1px solid #008060',
+          borderRadius: '4px'
+        }}>
+          <h3 style={{ margin: '0 0 16px 0', color: '#008060' }}>Bulk Sync Results</h3>
+          {allResults.map((result, index) => (
+            <div key={index} style={{
+              marginBottom: '12px',
+              padding: '12px',
+              background: result.success ? '#e8f5f1' : '#ffebee',
+              border: `1px solid ${result.success ? '#008060' : '#dc3545'}`,
+              borderRadius: '4px'
+            }}>
+              <h4 style={{ margin: '0 0 8px 0' }}>
+                {result.success ? '✓' : '✗'} {result.productName}
+              </h4>
+              {result.success ? (
+                <div>
+                  <p style={{ margin: '4px 0' }}>
+                    <strong>Synced:</strong> {result.data.synced || 0} variants
+                  </p>
+                  {result.data.failed > 0 && (
+                    <p style={{ margin: '4px 0', color: '#dc3545' }}>
+                      <strong>Failed:</strong> {result.data.failed}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p style={{ margin: '4px 0', color: '#dc3545' }}>
+                  Error: {result.error || result.data?.error || 'Unknown error'}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div style={{
           marginTop: '24px',
@@ -128,29 +236,37 @@ export default function SyncVariants() {
       }}>
         <h3>Instructions:</h3>
         <ol>
-          <li>Enter the Shopify Product GID (e.g., gid://shopify/Product/9114913341692)</li>
-          <li>Click "Sync Variants"</li>
-          <li>Wait for the sync to complete</li>
+          <li><strong>Sync All Products:</strong> Click the red "Sync All 3 Products" button to sync all main products at once</li>
+          <li><strong>Or Sync One Product:</strong>
+            <ul style={{ marginTop: '8px' }}>
+              <li>Enter the Shopify Product GID</li>
+              <li>Click "Sync This Product"</li>
+              <li>Wait for the sync to complete</li>
+            </ul>
+          </li>
           <li>All variants without a Shopify variant ID will be created in Shopify with correct prices</li>
         </ol>
 
-        <h4 style={{ marginTop: '24px' }}>Common Product IDs:</h4>
+        <h4 style={{ marginTop: '24px' }}>Main Products ({MAIN_PRODUCTS.length}):</h4>
         <ul>
-          <li>
-            <button
-              onClick={() => setProductId('gid://shopify/Product/9114913341692')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#008060',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                padding: 0
-              }}
-            >
-              3 Stone Rings - gid://shopify/Product/9114913341692
-            </button>
-          </li>
+          {MAIN_PRODUCTS.map((product, index) => (
+            <li key={index} style={{ marginBottom: '8px' }}>
+              <button
+                onClick={() => setProductId(product.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#008060',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontSize: '14px'
+                }}
+              >
+                {product.name} - {product.id}
+              </button>
+            </li>
+          ))}
         </ul>
       </div>
     </div>
