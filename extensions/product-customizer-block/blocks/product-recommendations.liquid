@@ -14,7 +14,7 @@
   <div class="unlimited-modal-overlay"></div>
   <div class="unlimited-modal-content">
     <div class="unlimited-modal-header">
-      <h3>Select Variations for Bundle</h3>
+      <h3 id="modal-title-{{ block.id }}">Confirm Bundle Selection</h3>
       <button class="unlimited-modal-close">&times;</button>
     </div>
     <div class="unlimited-modal-body" id="modal-body-{{ block.id }}">
@@ -22,7 +22,7 @@
     </div>
     <div class="unlimited-modal-footer">
       <button class="unlimited-modal-cancel">Cancel</button>
-      <button class="unlimited-modal-confirm">Add Selected to Cart</button>
+      <button class="unlimited-modal-confirm" id="modal-confirm-btn-{{ block.id }}">Confirm & Add to Cart</button>
     </div>
   </div>
 </div>
@@ -424,28 +424,15 @@
     function handleBulkAdd() {
       if (selectedProducts.size === 0) return;
 
-      // Show confirmation dialog
-      const itemCount = selectedProducts.size;
-      const confirmation = confirm(
-        `Add ${itemCount} product${itemCount > 1 ? 's' : ''} to your cart?\n\n` +
-        `This will add the selected bundle items with the displayed options.`
-      );
+      // Always show confirmation modal with all bundle items (including main product)
+      showBundleConfirmationModal();
+    }
 
-      if (!confirmation) return;
+    function showBundleConfirmationModal() {
+      // Build list of all products (selected bundle items)
+      const allProductIds = Array.from(selectedProducts);
 
-      // Check if any selected product has variants
-      const productsNeedingVariants = Array.from(selectedProducts).filter(productId => {
-        const variants = productVariantsCache[productId] || [];
-        return variants.length > 0 && !selectedVariants[productId];
-      });
-
-      if (productsNeedingVariants.length > 0) {
-        // Show modal for variant selection
-        showVariantModal(productsNeedingVariants);
-      } else {
-        // All variants selected, add directly
-        confirmBulkAdd();
-      }
+      showVariantModal(allProductIds, true); // true = confirmation mode
     }
 
     // Get selected attribute values from main product customizer
@@ -556,22 +543,44 @@
       return null;
     }
 
-    function showVariantModal(productIds) {
+    function showVariantModal(productIds, isConfirmationMode = false) {
+      // Update modal title
+      const modalTitle = document.getElementById(`modal-title-${blockId}`);
+      const confirmBtn = document.getElementById(`modal-confirm-btn-${blockId}`);
+
+      if (modalTitle) {
+        modalTitle.textContent = isConfirmationMode
+          ? 'Confirm Bundle Selection'
+          : 'Select Variations for Bundle';
+      }
+
+      if (confirmBtn) {
+        confirmBtn.textContent = isConfirmationMode
+          ? 'Confirm & Add to Cart'
+          : 'Add Selected to Cart';
+      }
+
       // Get main product selections for smart pre-fill
       const mainSelections = getMainProductSelections();
 
-      const instructionText = productIds.length > 1
-        ? `Please select options for all ${productIds.length} products in your bundle.`
-        : 'Please select options for this product.';
+      const instructionText = isConfirmationMode
+        ? `Review and confirm your bundle selection (${productIds.length} product${productIds.length > 1 ? 's' : ''})`
+        : (productIds.length > 1
+          ? `Please select options for all ${productIds.length} products in your bundle.`
+          : 'Please select options for this product.');
 
       const modalContent = `
-        <div class="unlimited-modal-instruction">
-          <p>${instructionText}</p>
-          ${Object.keys(mainSelections).length > 0 ? `
+        <div class="unlimited-modal-instruction ${isConfirmationMode ? 'unlimited-confirmation-mode' : ''}">
+          <p style="font-size: 16px; font-weight: 600;">${instructionText}</p>
+          ${isConfirmationMode ? `
+            <p style="color: #008060; margin-top: 8px; font-size: 14px;">
+              ✓ Options auto-matched from main product | You can edit any option below
+            </p>
+          ` : (Object.keys(mainSelections).length > 0 ? `
             <p style="color: #008060; font-weight: 600; margin-top: 8px;">
               ✓ Pre-filled with your selections from the main product
             </p>
-          ` : ''}
+          ` : '')}
         </div>
         ${productIds.map(productId => {
           const variants = productVariantsCache[productId] || [];
@@ -597,9 +606,30 @@
                   ? findMatchingValue({ valueText: matchedValueId }, attr.values)
                   : (attr.values.find(v => v.is_default)?.id || '');
 
+                // Determine match type for indicator
+                const mainSelectionForAttr = Object.values(mainSelections).find(sel =>
+                  sel.attrName && attr.name &&
+                  sel.attrName.toLowerCase() === attr.name.toLowerCase()
+                );
+
+                const selectedValueObj = attr.values.find(v => v.id === preSelectedValue);
+                let matchIndicator = '';
+                if (mainSelectionForAttr && selectedValueObj) {
+                  if (selectedValueObj.value.toLowerCase() === mainSelectionForAttr.valueText.toLowerCase()) {
+                    matchIndicator = '<span class="unlimited-match-badge unlimited-exact">✓ Exact match</span>';
+                  } else if (!isNaN(parseFloat(selectedValueObj.value)) && !isNaN(parseFloat(mainSelectionForAttr.valueText))) {
+                    matchIndicator = '<span class="unlimited-match-badge unlimited-nearest">~ Nearest match</span>';
+                  } else if (selectedValueObj.is_default) {
+                    matchIndicator = '<span class="unlimited-match-badge unlimited-default">Default value</span>';
+                  }
+                }
+
                 return `
                   <div class="unlimited-variant-option-group">
-                    <label class="unlimited-variant-label">${attr.name} <span class="unlimited-required">*</span></label>
+                    <div class="unlimited-variant-label-row">
+                      <label class="unlimited-variant-label">${attr.name} <span class="unlimited-required">*</span></label>
+                      ${matchIndicator}
+                    </div>
                     <select class="unlimited-variant-select" data-product-id="${productId}" data-attribute-id="${attr.id}" required>
                       <option value="">Choose ${attr.name}</option>
                       ${attr.values.map(value => `
@@ -610,7 +640,7 @@
                 `;
               }).join('')}
 
-              <div class="unlimited-variant-preview" style="display: none;">
+              <div class="unlimited-variant-preview" ${isConfirmationMode ? 'style="display: block;"' : 'style="display: none;"'}>
                 <div class="unlimited-variant-price"></div>
                 <div class="unlimited-variant-stock"></div>
               </div>
@@ -848,16 +878,24 @@
         }
 
         // Add all items to cart in one request
+        console.log('Adding items to cart:', itemsToAdd);
+
         const cartResponse = await fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: itemsToAdd })
         });
 
+        console.log('Cart response status:', cartResponse.status);
+
         if (!cartResponse.ok) {
-          const cartError = await cartResponse.json();
-          throw new Error(cartError.description || 'Failed to add bundle to cart');
+          const cartError = await cartResponse.json().catch(() => ({ description: 'Unknown error' }));
+          console.error('Cart add error:', cartError);
+          throw new Error(cartError.description || `Failed to add bundle to cart (status: ${cartResponse.status})`);
         }
+
+        const cartData = await cartResponse.json();
+        console.log('Cart add success:', cartData);
 
         // Success!
         closeModal();
@@ -1175,6 +1213,45 @@
     font-size: 14px;
     color: #202223;
     line-height: 1.5;
+  }
+
+  .unlimited-modal-instruction.unlimited-confirmation-mode {
+    background: linear-gradient(135deg, #e8f5f1 0%, #f0f9f6 100%);
+    border-left-width: 6px;
+  }
+
+  .unlimited-variant-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .unlimited-match-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .unlimited-match-badge.unlimited-exact {
+    background: #e8f5f1;
+    color: #008060;
+    border: 1px solid #008060;
+  }
+
+  .unlimited-match-badge.unlimited-nearest {
+    background: #fff4e5;
+    color: #ff9800;
+    border: 1px solid #ff9800;
+  }
+
+  .unlimited-match-badge.unlimited-default {
+    background: #f0f0f0;
+    color: #6d7175;
+    border: 1px solid #c9cccf;
   }
 
   .unlimited-product-variant-section {
