@@ -12,6 +12,7 @@ export default function SyncVariants() {
   const [productId, setProductId] = useState('gid://shopify/Product/9114913341692');
   const [syncing, setSyncing] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [forceSyncing, setForceSyncing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [allResults, setAllResults] = useState(null);
@@ -79,6 +80,47 @@ export default function SyncVariants() {
     setSyncingAll(false);
   };
 
+  const handleForceSync = async () => {
+    if (!confirm('⚠️ WARNING: This will clear all existing Shopify variant IDs and recreate ALL variants. This operation cannot be undone. Continue?')) {
+      return;
+    }
+
+    setForceSyncing(true);
+    setAllResults(null);
+    setError(null);
+
+    const results = [];
+
+    for (const product of MAIN_PRODUCTS) {
+      try {
+        const response = await fetch('/api/force-resync-variants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: product.id })
+        });
+
+        const data = await response.json();
+
+        results.push({
+          productName: product.name,
+          productId: product.id,
+          success: response.ok,
+          data: data
+        });
+      } catch (err) {
+        results.push({
+          productName: product.name,
+          productId: product.id,
+          success: false,
+          error: err.message
+        });
+      }
+    }
+
+    setAllResults(results);
+    setForceSyncing(false);
+  };
+
   return (
     <div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>Sync Variants to Shopify</h1>
@@ -106,7 +148,7 @@ export default function SyncVariants() {
       <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
         <button
           onClick={handleSync}
-          disabled={syncing || syncingAll || !productId}
+          disabled={syncing || syncingAll || forceSyncing || !productId}
           style={{
             flex: 1,
             padding: '12px 24px',
@@ -116,7 +158,7 @@ export default function SyncVariants() {
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 600,
-            cursor: (syncing || syncingAll) ? 'not-allowed' : 'pointer'
+            cursor: (syncing || syncingAll || forceSyncing) ? 'not-allowed' : 'pointer'
           }}
         >
           {syncing ? 'Syncing...' : 'Sync This Product'}
@@ -124,7 +166,7 @@ export default function SyncVariants() {
 
         <button
           onClick={handleSyncAll}
-          disabled={syncing || syncingAll}
+          disabled={syncing || syncingAll || forceSyncing}
           style={{
             flex: 1,
             padding: '12px 24px',
@@ -134,10 +176,39 @@ export default function SyncVariants() {
             borderRadius: '4px',
             fontSize: '16px',
             fontWeight: 600,
-            cursor: (syncing || syncingAll) ? 'not-allowed' : 'pointer'
+            cursor: (syncing || syncingAll || forceSyncing) ? 'not-allowed' : 'pointer'
           }}
         >
           {syncingAll ? 'Syncing All...' : `Sync All ${MAIN_PRODUCTS.length} Products`}
+        </button>
+      </div>
+
+      <div style={{ marginTop: '24px', padding: '16px', background: '#fff3cd', border: '2px solid #ff9800', borderRadius: '4px' }}>
+        <h3 style={{ margin: '0 0 12px 0', color: '#ff6f00' }}>⚠️ Force Re-sync (Advanced)</h3>
+        <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#333' }}>
+          Use this if variants show as synced but prices don't match. This will:
+        </p>
+        <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', fontSize: '14px', color: '#333' }}>
+          <li>Clear all existing Shopify variant IDs from database</li>
+          <li>Recreate ALL variants in Shopify with correct prices</li>
+          <li>This operation cannot be undone</li>
+        </ul>
+        <button
+          onClick={handleForceSync}
+          disabled={syncing || syncingAll || forceSyncing}
+          style={{
+            width: '100%',
+            padding: '12px 24px',
+            background: forceSyncing ? '#ccc' : '#ff9800',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '16px',
+            fontWeight: 600,
+            cursor: (syncing || syncingAll || forceSyncing) ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {forceSyncing ? 'Force Re-syncing All Products...' : '⚠️ Force Re-sync All Variants'}
         </button>
       </div>
 
