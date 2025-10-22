@@ -3,6 +3,17 @@
   This block displays custom product options with variant selection
 {% endcomment %}
 
+<!-- Hide default Shopify price -->
+<style>
+  .product__price,
+  .price:not(.unlimited-price),
+  .product-price,
+  [data-product-price],
+  .product__info-container .price__container:not(.unlimited-price-section) {
+    display: none !important;
+  }
+</style>
+
 <div id="unlimited-options-customizer-{{ block.id }}" class="unlimited-options-customizer" {{ block.shopify_attributes }}>
   <div id="customizer-app-root"></div>
 </div>

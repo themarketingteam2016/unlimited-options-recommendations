@@ -1,0 +1,13 @@
+/* Hide the default Shopify product price when custom variants are shown */
+.product__price,
+.price,
+.product-price,
+[data-product-price],
+.product__info-container .price__container {
+  display: none !important;
+}
+
+/* Show only our custom variant price */
+.unlimited-price-section {
+  display: flex !important;
+}
