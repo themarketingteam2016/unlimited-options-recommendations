@@ -79,7 +79,7 @@ export default function BundleCart({ productId, primaryOptionValue }) {
     setCurrentProduct(null);
   };
 
-  const handleBulkAddToCart = () => {
+  const handleBulkAddToCart = async () => {
     const missingSelection = recommendations.find(
       rec => !selectedVariants[rec.recommended_product.id]
     );
@@ -89,14 +89,102 @@ export default function BundleCart({ productId, primaryOptionValue }) {
       return;
     }
 
-    // Add all selected variants to cart
-    const cartItems = recommendations.map(rec => ({
-      productId: rec.recommended_product.id,
-      variantId: selectedVariants[rec.recommended_product.id]
-    }));
+    try {
+      console.log('[Bundle Add] Starting bundle add to cart');
 
-    console.log('Adding to cart:', cartItems);
-    alert(`Added ${cartItems.length} products to cart!`);
+      // Prepare all items to add to cart
+      const itemsToAdd = [];
+
+      // Process each recommendation variant
+      for (const rec of recommendations) {
+        const variantId = selectedVariants[rec.recommended_product.id];
+
+        console.log('[Bundle Add] Processing variant:', variantId);
+
+        // Call API to prepare cart data
+        const apiResponse = await fetch(`/api/cart/add-variant`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantId: variantId,
+            quantity: 1
+          })
+        });
+
+        if (!apiResponse.ok) {
+          const error = await apiResponse.json();
+          throw new Error(error.error || 'Failed to prepare cart item');
+        }
+
+        const apiData = await apiResponse.json();
+        console.log('[Bundle Add] API response:', apiData);
+
+        if (apiData.success && apiData.cartData) {
+          itemsToAdd.push(apiData.cartData);
+        } else if (apiData.fallback && apiData.variant) {
+          // Handle fallback mode
+          const properties = {
+            '_Custom_Variant': 'Yes',
+            '_SKU': apiData.variant.sku || 'Custom',
+            '_Price': `$${apiData.variant.price}`
+          };
+
+          apiData.variant.options?.forEach(opt => {
+            properties[opt.name] = opt.value;
+          });
+
+          // Use fallback variant ID if available
+          const fallbackVariantId = apiData.variant.shopify_variant_id || rec.recommended_product.shopify_product_id;
+
+          if (fallbackVariantId) {
+            itemsToAdd.push({
+              id: fallbackVariantId,
+              quantity: 1,
+              properties: properties
+            });
+          }
+        }
+      }
+
+      console.log('[Bundle Add] Final items to add:', itemsToAdd);
+
+      if (itemsToAdd.length === 0) {
+        throw new Error('No items to add to cart');
+      }
+
+      // Add all items to Shopify cart
+      const cartResponse = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToAdd })
+      });
+
+      if (!cartResponse.ok) {
+        const cartError = await cartResponse.json();
+        throw new Error(cartError.description || cartError.message || 'Failed to add to cart');
+      }
+
+      const cartData = await cartResponse.json();
+      console.log('[Bundle Add] Cart add success:', cartData);
+
+      // Trigger cart update events
+      document.dispatchEvent(new CustomEvent('cart:updated'));
+      document.dispatchEvent(new CustomEvent('cart:refresh'));
+
+      if (typeof jQuery !== 'undefined') {
+        jQuery(document).trigger('cart.updated');
+      }
+
+      // Success notification
+      alert(`Successfully added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''} to cart!`);
+
+      // Clear selections
+      setSelectedVariants({});
+
+    } catch (error) {
+      console.error('[Bundle Add] Error:', error);
+      alert(`Failed to add bundle to cart: ${error.message}`);
+    }
   };
 
   if (loading || recommendations.length === 0) {
