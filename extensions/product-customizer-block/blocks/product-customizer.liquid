@@ -5,12 +5,32 @@
 
 <!-- Hide default Shopify price -->
 <style>
-  .product__price,
+  /* Hide all Shopify product prices - only show custom variant price */
+  .product__price:not(.unlimited-price),
   .price:not(.unlimited-price),
-  .product-price,
-  [data-product-price],
-  .product__info-container .price__container:not(.unlimited-price-section) {
+  .product-price:not(.unlimited-price),
+  [data-product-price]:not(.unlimited-price),
+  .product__info-container .price__container:not(.unlimited-price-section),
+  .price__container:not(.unlimited-price-section),
+  .price-item:not(.unlimited-price),
+  .product__price-wrapper:not(.unlimited-price-section),
+  .product-single__price:not(.unlimited-price),
+  .product__pricing:not(.unlimited-price-section),
+  .product-form__price:not(.unlimited-price),
+  [id*="price"]:not(.unlimited-price):not(.unlimited-price-section),
+  [class*="ProductPrice"]:not(.unlimited-price),
+  [data-price]:not(.unlimited-price),
+  .money:not(.unlimited-price) {
     display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Ensure our custom price is always visible */
+  .unlimited-price,
+  .unlimited-price-section,
+  .unlimited-price-section * {
+    display: block !important;
+    visibility: visible !important;
   }
 </style>
 
@@ -984,6 +1004,42 @@
         }
       }
     }
+
+    // Function to hide Shopify default prices
+    function hideShopifyPrices() {
+      const priceSelectors = [
+        '.product__price:not(.unlimited-price)',
+        '.price:not(.unlimited-price)',
+        '.product-price:not(.unlimited-price)',
+        '[data-product-price]:not(.unlimited-price)',
+        '.price__container:not(.unlimited-price-section)',
+        '.price-item:not(.unlimited-price)',
+        '.product__price-wrapper:not(.unlimited-price-section)',
+        '.product-single__price:not(.unlimited-price)',
+        '.product__pricing:not(.unlimited-price-section)',
+        '.product-form__price:not(.unlimited-price)',
+        '[class*="ProductPrice"]:not(.unlimited-price)',
+        '[data-price]:not(.unlimited-price)',
+        '.money:not(.unlimited-price)'
+      ];
+
+      priceSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          // Check if it's not our custom price
+          if (!el.classList.contains('unlimited-price') &&
+              !el.classList.contains('unlimited-price-section') &&
+              !el.closest('.unlimited-price-section')) {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          }
+        });
+      });
+    }
+
+    // Hide prices on load and periodically
+    hideShopifyPrices();
+    setInterval(hideShopifyPrices, 500);
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
