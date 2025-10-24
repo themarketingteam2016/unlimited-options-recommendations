@@ -72,12 +72,11 @@ async function addVariantHandler(req, res) {
       id: variant.id,
       sku: variant.sku,
       stock: variant.stock_quantity,
-      shopifyVariantId: variant.shopify_variant_id,
       productId: variant.product.shopify_product_id
     });
 
     // Check stock
-    if (variant.stock_quantity < quantity) {
+    if (variant.stock_quantity !== null && variant.stock_quantity !== undefined && variant.stock_quantity < quantity) {
       console.error('[add-variant] Insufficient stock:', {
         requested: quantity,
         available: variant.stock_quantity
@@ -88,86 +87,45 @@ async function addVariantHandler(req, res) {
       });
     }
 
-    let shopifyVariantId = variant.shopify_variant_id;
+    // Note: variants table doesn't have shopify_variant_id column
+    // Always use fallback mode with line item properties
+    console.log('[add-variant] Using fallback mode - custom variants not synced to Shopify');
 
-    // Create Shopify variant if it doesn't exist
-    if (!shopifyVariantId) {
-      console.log('[add-variant] Creating Shopify variant on-demand');
-      console.log('[add-variant] Variant details:', {
-        internalId: variant.id,
-        productId: variant.product?.shopify_product_id,
-        price: variant.price,
-        sku: variant.sku,
-        stock: variant.stock_quantity
-      });
+    // Build line item properties with variant options
+    const properties = {
+      '_Custom_Variant': 'Yes',
+      '_Price': `$${variant.price}`
+    };
 
-      try {
-        shopifyVariantId = await createVariantOnDemand(variantId);
-        console.log('[add-variant] Shopify variant created successfully:', shopifyVariantId);
-
-        // Verify the variant was created
-        if (!shopifyVariantId || shopifyVariantId === 'null' || shopifyVariantId === 'undefined') {
-          throw new Error('Invalid Shopify variant ID returned');
-        }
-      } catch (error) {
-        console.error('[add-variant] Failed to create Shopify variant:', {
-          error: error.message,
-          stack: error.stack,
-          variantId: variantId
-        });
-
-        // Fallback: return data for client-side cart add with properties
-        return res.status(200).json({
-          success: false,
-          fallback: true,
-          variant: {
-            id: variant.id,
-            sku: variant.sku,
-            price: variant.price,
-            title: variant.product.title,
-            options: variant.variant_options?.map(opt => ({
-              name: opt.attribute.name,
-              value: opt.attribute_value.value
-            })) || []
-          },
-          message: 'Using fallback mode with line item properties',
-          error: error.message
-        });
-      }
-    } else {
-      console.log('[add-variant] Using existing Shopify variant:', shopifyVariantId);
-    }
-
-    // Extract numeric ID from GID
-    const numericVariantId = shopifyVariantId.split('/').pop();
-    console.log('[add-variant] Extracted numeric variant ID:', numericVariantId);
-
-    // Build line item properties
-    const properties = {};
     variant.variant_options?.forEach(opt => {
-      properties[opt.attribute.name] = opt.attribute_value.value;
+      if (opt.attribute && opt.attribute_value) {
+        properties[opt.attribute.name] = opt.attribute_value.value;
+      }
     });
 
     if (variant.sku) {
       properties['_SKU'] = variant.sku;
     }
 
-    console.log('[add-variant] Built cart data with properties:', properties);
+    console.log('[add-variant] Built fallback cart data with properties:', properties);
 
-    // Return cart add data
+    // Return fallback response - client will use Shopify product's first variant with custom properties
     const response = {
-      success: true,
-      cartData: {
-        id: numericVariantId,
-        quantity: quantity,
-        properties: properties
-      },
+      success: false,
+      fallback: true,
       variant: {
-        id: shopifyVariantId,
+        id: variant.id,
         sku: variant.sku,
         price: variant.price,
-        stock: variant.stock_quantity
-      }
+        title: variant.product.title,
+        shopify_product_id: variant.product.shopify_product_id,
+        options: variant.variant_options?.map(opt => ({
+          name: opt.attribute?.name || 'Unknown',
+          value: opt.attribute_value?.value || 'Unknown'
+        })) || [],
+        properties: properties
+      },
+      message: 'Using fallback mode with line item properties'
     };
 
     console.log('[add-variant] Success response:', response);

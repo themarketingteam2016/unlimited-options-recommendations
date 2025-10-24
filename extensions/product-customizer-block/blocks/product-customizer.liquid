@@ -575,21 +575,36 @@
 
           if (apiData.success && apiData.cartData) {
             itemsToAdd.push(apiData.cartData);
-          } else if (apiData.fallback) {
+          } else if (apiData.fallback && apiData.variant) {
             const productVariantId = {{ product.variants.first.id }};
-            const properties = {
+            console.log('[Bundle Add] Using fallback mode for main product');
+            console.log('[Bundle Add] Shopify variant ID:', productVariantId);
+            console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
+
+            // Use properties from API response if available, otherwise build them
+            const properties = apiData.variant.properties || {
               '_Custom_Variant': 'Yes',
               '_SKU': apiData.variant.sku || 'Custom',
               '_Price': `$${apiData.variant.price}`
             };
-            apiData.variant.options?.forEach(opt => {
-              properties[opt.name] = opt.value;
-            });
+
+            // Add options if not already in properties
+            if (!apiData.variant.properties) {
+              apiData.variant.options?.forEach(opt => {
+                properties[opt.name] = opt.value;
+              });
+            }
+
             itemsToAdd.push({
               id: productVariantId,
               quantity: 1,
               properties: properties
             });
+
+            console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
+          } else {
+            console.error('[Bundle Add] Unexpected API response format:', apiData);
+            throw new Error('Invalid API response format');
           }
 
           // Handle recommendations with smart pre-fill if any selected
@@ -684,7 +699,7 @@
                   if (recApiData.success && recApiData.cartData) {
                     itemsToAdd.push(recApiData.cartData);
                     console.log('[Bundle Add] Added recommendation to cart items:', recApiData.cartData);
-                  } else if (recApiData.fallback) {
+                  } else if (recApiData.fallback && recApiData.variant) {
                     // Handle fallback mode for recommendations
                     console.log('[Bundle Add] Using fallback mode for recommendation');
 
@@ -692,15 +707,19 @@
                     const fallbackVariantId = cachedData?.shopifyFallbackVariantId;
 
                     if (fallbackVariantId) {
-                      const properties = {
+                      // Use properties from API response if available
+                      const properties = recApiData.variant.properties || {
                         '_Custom_Variant': 'Yes',
                         '_SKU': recApiData.variant.sku || 'Custom',
                         '_Price': `$${recApiData.variant.price}`
                       };
 
-                      recApiData.variant.options?.forEach(opt => {
-                        properties[opt.name] = opt.value;
-                      });
+                      // Add options if not already in properties
+                      if (!recApiData.variant.properties) {
+                        recApiData.variant.options?.forEach(opt => {
+                          properties[opt.name] = opt.value;
+                        });
+                      }
 
                       itemsToAdd.push({
                         id: fallbackVariantId,
@@ -716,6 +735,9 @@
                       console.error('[Bundle Add] No fallback variant ID available for recommendation');
                       recommendationErrors.push(`Recommendation ${productId}: No fallback variant ID`);
                     }
+                  } else {
+                    console.error('[Bundle Add] Unexpected recommendation API response:', recApiData);
+                    recommendationErrors.push(`Recommendation ${productId}: Invalid API response`);
                   }
                 } else {
                   const recError = await recApiResponse.json();
