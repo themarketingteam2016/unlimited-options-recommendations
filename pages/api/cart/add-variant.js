@@ -24,7 +24,7 @@ async function addVariantHandler(req, res) {
       .from('variants')
       .select(`
         *,
-        product:products!inner(shopify_product_id, title),
+        product:products(shopify_product_id, title),
         variant_options (
           attribute:attributes (name),
           attribute_value:attribute_values (value)
@@ -33,11 +33,38 @@ async function addVariantHandler(req, res) {
       .eq('id', variantId)
       .single();
 
-    if (variantError || !variant) {
-      console.error('[add-variant] Variant not found:', variantError);
+    if (variantError) {
+      console.error('[add-variant] Database error fetching variant:', {
+        error: variantError,
+        message: variantError?.message,
+        details: variantError?.details,
+        hint: variantError?.hint,
+        code: variantError?.code
+      });
+      return res.status(500).json({
+        error: 'Database error',
+        message: variantError?.message,
+        details: variantError?.details
+      });
+    }
+
+    if (!variant) {
+      console.error('[add-variant] Variant not found with ID:', variantId);
       return res.status(404).json({
         error: 'Variant not found',
-        details: variantError?.message
+        variantId: variantId
+      });
+    }
+
+    // Validate product relationship
+    if (!variant.product || !variant.product.shopify_product_id) {
+      console.error('[add-variant] Variant has no associated product:', {
+        variantId: variant.id,
+        product: variant.product
+      });
+      return res.status(400).json({
+        error: 'Variant has no associated product',
+        variantId: variant.id
       });
     }
 
@@ -46,7 +73,7 @@ async function addVariantHandler(req, res) {
       sku: variant.sku,
       stock: variant.stock_quantity,
       shopifyVariantId: variant.shopify_variant_id,
-      productId: variant.product?.shopify_product_id
+      productId: variant.product.shopify_product_id
     });
 
     // Check stock
@@ -146,10 +173,16 @@ async function addVariantHandler(req, res) {
     console.log('[add-variant] Success response:', response);
     res.status(200).json(response);
   } catch (error) {
-    console.error('[add-variant] Unexpected error:', error);
+    console.error('[add-variant] Unexpected error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      cause: error.cause
+    });
     res.status(500).json({
-      error: error.message,
-      details: error.stack
+      error: 'Internal server error',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
