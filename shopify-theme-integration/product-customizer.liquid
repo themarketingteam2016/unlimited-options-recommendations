@@ -638,11 +638,54 @@
         selectedRecommendations: Array.from(selectedRecommendations)
       });
 
-      // Add main product
-      itemsToAdd.push({
-        id: selectedVariant.shopify_variant_id || selectedVariant.id,
-        quantity: 1
+      // Add main product via API first
+      const apiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variantId: selectedVariant.id,
+          quantity: 1
+        })
       });
+
+      if (!apiResponse.ok) {
+        const error = await apiResponse.json();
+        throw new Error(error.error || 'Failed to prepare cart');
+      }
+
+      const apiData = await apiResponse.json();
+      console.log('[Bundle Add] Main product API response:', apiData);
+
+      // Handle fallback mode for custom variants
+      if (apiData.fallback && apiData.variant) {
+        const productVariantId = {{ product.variants.first.id }};
+        console.log('[Bundle Add] Using fallback mode for main product');
+        console.log('[Bundle Add] Shopify variant ID:', productVariantId);
+        console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
+
+        // Use properties from API response
+        const properties = apiData.variant.properties || {
+          '_Custom_Variant': 'Yes',
+          '_Price': `$${apiData.variant.price}`
+        };
+
+        itemsToAdd.push({
+          id: productVariantId,
+          quantity: 1,
+          properties: properties
+        });
+
+        console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
+      } else if (apiData.success && apiData.shopifyVariantId) {
+        // Direct Shopify variant (if synced)
+        itemsToAdd.push({
+          id: apiData.shopifyVariantId,
+          quantity: 1
+        });
+      } else {
+        console.error('[Bundle Add] Unexpected API response format:', apiData);
+        throw new Error('Invalid API response format');
+      }
 
       // Handle recommendations with smart pre-fill if any selected
       if (selectedRecommendations.size > 0) {
@@ -711,11 +754,50 @@
           console.log('[Bundle Add] Matched variant:', matchedVariant);
 
           if (matchedVariant) {
-            itemsToAdd.push({
-              id: matchedVariant.shopify_variant_id || matchedVariant.id,
-              quantity: 1
-            });
-            console.log('[Bundle Add] Added recommendation to cart items:', matchedVariant.shopify_variant_id || matchedVariant.id);
+            // Add recommendation via API
+            try {
+              const recApiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  variantId: matchedVariant.id,
+                  quantity: 1
+                })
+              });
+
+              if (recApiResponse.ok) {
+                const recApiData = await recApiResponse.json();
+                console.log('[Bundle Add] Recommendation API response:', recApiData);
+
+                if (recApiData.fallback && recApiData.variant) {
+                  // Fallback mode: use Shopify product's first variant with properties
+                  const shopifyFallbackVariantId = cachedData?.shopifyFallbackVariantId;
+
+                  if (shopifyFallbackVariantId) {
+                    itemsToAdd.push({
+                      id: shopifyFallbackVariantId,
+                      quantity: 1,
+                      properties: recApiData.variant.properties || {}
+                    });
+                    console.log('[Bundle Add] Added recommendation (fallback):', shopifyFallbackVariantId);
+                  } else {
+                    recommendationErrors.push(`No fallback variant for product ${productId}`);
+                  }
+                } else if (recApiData.success && recApiData.shopifyVariantId) {
+                  // Direct Shopify variant
+                  itemsToAdd.push({
+                    id: recApiData.shopifyVariantId,
+                    quantity: 1
+                  });
+                  console.log('[Bundle Add] Added recommendation (direct):', recApiData.shopifyVariantId);
+                }
+              } else {
+                recommendationErrors.push(`API error for product ${productId}`);
+              }
+            } catch (err) {
+              console.error('[Bundle Add] Error adding recommendation:', err);
+              recommendationErrors.push(`Error adding product ${productId}: ${err.message}`);
+            }
           } else {
             recommendationErrors.push(`No matching variant found for product ${productId}`);
           }
