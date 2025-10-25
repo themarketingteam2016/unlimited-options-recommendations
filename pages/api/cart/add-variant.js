@@ -4,6 +4,8 @@ import { createVariantOnDemand } from '../../../lib/shopify-variants';
 import { handleCors } from '../../../lib/cors';
 
 async function addVariantHandler(req, res) {
+  console.log('[add-variant] Handler started');
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -16,6 +18,15 @@ async function addVariantHandler(req, res) {
     if (!variantId) {
       console.error('[add-variant] Missing variantId');
       return res.status(400).json({ error: 'variantId is required' });
+    }
+
+    // Check if Supabase is configured
+    if (!supabaseAdmin) {
+      console.error('[add-variant] Supabase admin client not initialized');
+      return res.status(500).json({
+        error: 'Database not configured',
+        message: 'Supabase admin client is not available'
+      });
     }
 
     // Get variant details from database
@@ -148,6 +159,20 @@ async function addVariantHandler(req, res) {
 // Wrap with optional auth first, then CORS
 const authHandler = withOptionalAuth(addVariantHandler);
 
-export default function handler(req, res) {
-  return handleCors(req, res, authHandler);
+export default async function handler(req, res) {
+  try {
+    console.log('[add-variant] Main handler called');
+    return await handleCors(req, res, authHandler);
+  } catch (error) {
+    console.error('[add-variant] Error in main handler:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return res.status(500).json({
+      error: 'Handler error',
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
 }
