@@ -105,8 +105,7 @@ async function addVariantHandler(req, res) {
     // Build line item properties with variant options
     const properties = {
       '_Custom_Variant': 'Yes',
-      '_Price': `$${variant.price}`,
-      '_custom_variant_id': variant.id // Store variant ID for checkout
+      '_Price': `$${variant.price}`
     };
 
     variant.variant_options?.forEach(opt => {
