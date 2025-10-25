@@ -1,0 +1,205 @@
+{% comment %}
+  Cart Price Override for Custom Variants
+
+  This snippet overrides displayed prices in cart for custom variants
+  while keeping the checkout flow via Draft Orders
+
+  Usage: Include in cart.liquid or cart drawer
+  {% render 'cart-price-override' %}
+{% endcomment %}
+
+<script>
+(function() {
+  console.log('[Cart Price Override] Initializing...');
+
+  function updateCartPrices() {
+    // Get cart data
+    fetch('/cart.js')
+      .then(r => r.json())
+      .then(cart => {
+        console.log('[Cart Price Override] Cart data:', cart);
+
+        cart.items.forEach((item, index) => {
+          // Check if item has custom price property
+          const customPrice = item.properties?._Price;
+
+          if (customPrice) {
+            console.log('[Cart Price Override] Found custom variant:', {
+              title: item.title,
+              customPrice: customPrice,
+              originalPrice: item.price
+            });
+
+            // Find the cart line item element
+            // This selector may need adjustment based on your theme
+            const selectors = [
+              `[data-cart-item-index="${index}"]`,
+              `[data-index="${index}"]`,
+              `.cart-item:nth-child(${index + 1})`,
+              `.cart__row:nth-child(${index + 1})`
+            ];
+
+            let lineElement = null;
+            for (const selector of selectors) {
+              lineElement = document.querySelector(selector);
+              if (lineElement) break;
+            }
+
+            if (lineElement) {
+              // Find price elements and update them
+              const priceElements = lineElement.querySelectorAll(
+                '.cart-item__price, .cart__price, [data-cart-item-price], .price'
+              );
+
+              priceElements.forEach(priceEl => {
+                // Replace the price text
+                const originalText = priceEl.textContent;
+                priceEl.textContent = customPrice;
+                priceEl.setAttribute('data-original-price', originalText);
+                priceEl.style.color = '#008060';
+                priceEl.style.fontWeight = '600';
+
+                console.log('[Cart Price Override] Updated price element:', {
+                  original: originalText,
+                  new: customPrice
+                });
+              });
+
+              // Add a badge to indicate custom variant
+              const badge = document.createElement('span');
+              badge.className = 'custom-variant-badge';
+              badge.textContent = 'Custom Configuration';
+              badge.style.cssText = `
+                display: inline-block;
+                padding: 2px 8px;
+                margin-left: 8px;
+                font-size: 11px;
+                background: #e0f7f4;
+                color: #006e52;
+                border-radius: 3px;
+                font-weight: 500;
+              `;
+
+              const titleElement = lineElement.querySelector('.cart-item__name, .cart__name, [data-cart-item-title]');
+              if (titleElement && !titleElement.querySelector('.custom-variant-badge')) {
+                titleElement.appendChild(badge);
+              }
+            }
+          }
+        });
+
+        // Update cart total message
+        addCheckoutMessage(cart);
+      })
+      .catch(e => console.error('[Cart Price Override] Error:', e));
+  }
+
+  function addCheckoutMessage(cart) {
+    // Check if cart has any custom variants
+    const hasCustomVariants = cart.items.some(item => item.properties?._Price);
+
+    if (hasCustomVariants) {
+      const cartFooter = document.querySelector('.cart__footer, .cart-footer, [data-cart-footer]');
+
+      if (cartFooter) {
+        // Remove existing message
+        const existingMessage = cartFooter.querySelector('.custom-variant-checkout-message');
+        if (existingMessage) {
+          existingMessage.remove();
+        }
+
+        // Add new message
+        const message = document.createElement('div');
+        message.className = 'custom-variant-checkout-message';
+        message.style.cssText = `
+          padding: 12px 16px;
+          margin: 16px 0;
+          background: #fff4e6;
+          border-left: 4px solid #ff9900;
+          border-radius: 4px;
+          font-size: 14px;
+          line-height: 1.4;
+        `;
+        message.innerHTML = `
+          <strong>⚠️ Custom Variants in Cart</strong><br>
+          <span style="font-size: 13px;">
+            Your cart contains custom configured items. Click "Checkout" to proceed with the correct pricing.
+          </span>
+        `;
+
+        cartFooter.insertBefore(message, cartFooter.firstChild);
+      }
+    }
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateCartPrices);
+  } else {
+    updateCartPrices();
+  }
+
+  // Run when cart updates
+  document.addEventListener('cart:updated', updateCartPrices);
+  document.addEventListener('cart:refresh', updateCartPrices);
+  document.addEventListener('cart:change', updateCartPrices);
+
+  // Intercept checkout button to use Draft Orders
+  function interceptCheckout() {
+    const checkoutButtons = document.querySelectorAll(
+      'button[name="checkout"], .cart__checkout, [data-cart-checkout]'
+    );
+
+    checkoutButtons.forEach(btn => {
+      if (btn.dataset.customCheckoutAttached) return;
+
+      btn.addEventListener('click', async function(e) {
+        // Check if cart has custom variants
+        const cart = await fetch('/cart.js').then(r => r.json());
+        const hasCustomVariants = cart.items.some(item => item.properties?._Price);
+
+        if (hasCustomVariants) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          console.log('[Cart Price Override] Redirecting to custom checkout...');
+
+          // TODO: Call your create-checkout API with all cart items
+          // For now, show a message
+          alert('Custom checkout flow coming soon! Click "Buy Now" on product pages for custom variants.');
+
+          return false;
+        }
+      }, true);
+
+      btn.dataset.customCheckoutAttached = 'true';
+    });
+  }
+
+  // Attach checkout interceptor
+  setTimeout(interceptCheckout, 100);
+  document.addEventListener('cart:updated', () => setTimeout(interceptCheckout, 100));
+
+  console.log('[Cart Price Override] Initialized successfully');
+})();
+</script>
+
+<style>
+.custom-variant-badge {
+  font-size: 11px !important;
+  background: #e0f7f4 !important;
+  color: #006e52 !important;
+  padding: 2px 8px !important;
+  border-radius: 3px !important;
+  margin-left: 8px !important;
+  display: inline-block !important;
+}
+
+.custom-variant-checkout-message {
+  padding: 12px 16px !important;
+  margin: 16px 0 !important;
+  background: #fff4e6 !important;
+  border-left: 4px solid #ff9900 !important;
+  border-radius: 4px !important;
+}
+</style>
