@@ -229,8 +229,11 @@
         ` : ''}
 
         <div class="unlimited-customizer__actions">
-          <button type="button" class="unlimited-add-to-cart btn" disabled>
+          <button type="button" class="unlimited-buy-now btn btn-primary" disabled>
             Select All Options
+          </button>
+          <button type="button" class="unlimited-add-to-cart btn btn-secondary" disabled style="display: none;">
+            Add to Cart (Preview)
           </button>
         </div>
       </div>
@@ -423,15 +426,22 @@
       preview.style.display = 'block';
     }
 
-    // Add to cart button
+    // Buy Now button (primary action)
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
+    buyNowBtn.addEventListener('click', buyNow);
+
+    // Add to cart button (secondary/hidden)
     const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
-    addToCartBtn.addEventListener('click', addToCart);
+    if (addToCartBtn) {
+      addToCartBtn.addEventListener('click', addToCart);
+    }
   }
 
   function updateVariant() {
     const variantInfo = container.querySelector('.unlimited-customizer__variant-info');
     const priceEl = container.querySelector('.unlimited-variant-price');
     const skuEl = container.querySelector('.unlimited-variant-sku');
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
     const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
 
     // Check if all options selected
@@ -520,23 +530,37 @@
           skuEl.style.display = 'block';
         }
 
-        // Enable add to cart with dynamic text
-        addToCartBtn.disabled = false;
+        // Enable buy now button with dynamic text
+        buyNowBtn.disabled = false;
 
         if (selectedRecommendations.size > 0) {
-          addToCartBtn.textContent = 'Add Bundle to Cart';
+          buyNowBtn.textContent = 'Buy Bundle Now';
         } else {
-          addToCartBtn.textContent = 'Add to Cart';
+          buyNowBtn.textContent = 'Buy Now';
+        }
+
+        // Also enable add to cart if visible
+        if (addToCartBtn) {
+          addToCartBtn.disabled = false;
+          addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
         }
       } else {
         variantInfo.style.display = 'none';
-        addToCartBtn.disabled = true;
-        addToCartBtn.textContent = 'Variant Not Available';
+        buyNowBtn.disabled = true;
+        buyNowBtn.textContent = 'Variant Not Available';
+        if (addToCartBtn) {
+          addToCartBtn.disabled = true;
+          addToCartBtn.textContent = 'Variant Not Available';
+        }
       }
     } else {
       variantInfo.style.display = 'none';
-      addToCartBtn.disabled = true;
-      addToCartBtn.textContent = 'Select All Options';
+      buyNowBtn.disabled = true;
+      buyNowBtn.textContent = 'Select All Options';
+      if (addToCartBtn) {
+        addToCartBtn.disabled = true;
+        addToCartBtn.textContent = 'Select All Options';
+      }
     }
   }
 
@@ -905,6 +929,147 @@
     }
   }
 
+  async function buyNow() {
+    if (!selectedVariant) return;
+
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
+    buyNowBtn.disabled = true;
+    buyNowBtn.textContent = 'Creating checkout...';
+
+    try {
+      const itemsToProcess = [];
+
+      console.log('[Buy Now] Starting checkout creation', {
+        mainVariant: selectedVariant.id,
+        selectedRecommendations: Array.from(selectedRecommendations)
+      });
+
+      // Add main product
+      itemsToProcess.push({
+        variantId: selectedVariant.id,
+        quantity: 1
+      });
+
+      // Handle recommendations with smart pre-fill if any selected
+      if (selectedRecommendations.size > 0) {
+        const mainSelections = getMainProductSelections();
+        console.log('[Buy Now] Main selections:', mainSelections);
+
+        for (const productId of selectedRecommendations) {
+          console.log('[Buy Now] Processing recommendation:', productId);
+
+          const cachedData = recommendationVariantsCache[productId];
+          const recVariants = cachedData?.variants || [];
+
+          if (recVariants.length === 0) {
+            console.warn('[Buy Now] Skipping recommendation - no variants:', productId);
+            continue;
+          }
+
+          // Extract attributes for this recommendation
+          const recAttributes = extractAttributes(recVariants);
+
+          // Build pre-filled selections
+          const preFilledSelections = {};
+
+          recAttributes.forEach(attr => {
+            // Try to match with main product selections
+            const matchingMainSelection = Object.values(mainSelections).find(sel =>
+              sel.attrName && attr.name &&
+              sel.attrName.toLowerCase() === attr.name.toLowerCase()
+            );
+
+            if (matchingMainSelection) {
+              const matchedValueId = findMatchingValue(
+                { valueText: matchingMainSelection.valueText },
+                attr.values
+              );
+
+              if (matchedValueId) {
+                preFilledSelections[attr.id] = matchedValueId;
+              }
+            } else {
+              // No match, use default or first
+              const defaultValue = attr.values.find(v => v.is_default);
+              if (defaultValue) {
+                preFilledSelections[attr.id] = defaultValue.id;
+              }
+            }
+          });
+
+          // Find matching variant from pre-filled selections
+          const matchedVariant = recVariants.find(variant => {
+            return variant.variant_options?.every(opt =>
+              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+            );
+          });
+
+          if (matchedVariant) {
+            itemsToProcess.push({
+              variantId: matchedVariant.id,
+              quantity: 1
+            });
+            console.log('[Buy Now] Added recommendation:', matchedVariant.id);
+          } else {
+            console.warn('[Buy Now] No matching variant for recommendation:', productId);
+          }
+        }
+      }
+
+      console.log('[Buy Now] Creating checkout with items:', itemsToProcess);
+
+      // Call create-checkout API
+      const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: itemsToProcess })
+      });
+
+      console.log('[Buy Now] Checkout response status:', response.status);
+
+      const data = await response.json();
+      console.log('[Buy Now] Checkout response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to create checkout');
+      }
+
+      if (!data.success || !data.checkoutUrl) {
+        throw new Error('No checkout URL returned');
+      }
+
+      console.log('[Buy Now] Redirecting to checkout:', data.checkoutUrl);
+
+      // Clear recommendation selections
+      selectedRecommendations.clear();
+      const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+      checkboxes.forEach(cb => cb.checked = false);
+
+      // Hide bundle preview
+      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+      if (bundlePreview) {
+        bundlePreview.style.display = 'none';
+      }
+
+      // Redirect to checkout
+      window.location.href = data.checkoutUrl;
+
+    } catch (error) {
+      console.error('[Buy Now] Error creating checkout:', error);
+      buyNowBtn.textContent = 'Error - Try Again';
+
+      alert(`Failed to create checkout: ${error.message}\n\nCheck console for details.`);
+
+      setTimeout(() => {
+        const hasRecommendations = selectedRecommendations.size > 0;
+        buyNowBtn.textContent = hasRecommendations ? 'Buy Bundle Now' : 'Buy Now';
+        buyNowBtn.disabled = false;
+      }, 2000);
+    }
+  }
+
   // Initialize
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadCustomizer);
@@ -999,31 +1164,66 @@
 
 .unlimited-customizer__actions {
   display: flex;
-  gap: 20px;
+  gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.unlimited-add-to-cart {
+.unlimited-buy-now {
   flex: 1;
-  padding: 14px 24px;
-  font-size: 16px;
-  font-weight: 600;
+  min-width: 200px;
+  padding: 16px 32px;
+  font-size: 18px;
+  font-weight: 700;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   background: #008060;
   color: white;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 128, 96, 0.3);
+}
+
+.unlimited-buy-now:hover:not(:disabled) {
+  background: #006e52;
+  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.4);
+  transform: translateY(-1px);
+}
+
+.unlimited-buy-now:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #999;
+  box-shadow: none;
+  transform: none;
+}
+
+.unlimited-add-to-cart {
+  flex: 0 0 auto;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #008060;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  color: #008060;
+  transition: all 0.2s;
 }
 
 .unlimited-add-to-cart:hover:not(:disabled) {
-  background: #006e52;
+  background: #f0f7f5;
+  border-color: #006e52;
+  color: #006e52;
 }
 
 .unlimited-add-to-cart:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: #999;
+  border-color: #999;
+  color: #999;
 }
 
 .spinner {
