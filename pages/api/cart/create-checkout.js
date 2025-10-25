@@ -212,9 +212,30 @@ async function createCheckoutHandler(req, res) {
 
     console.log('[create-checkout] Draft order mutation variables:', JSON.stringify(variables, null, 2));
 
-    const response = await shopifyClient.request(draftOrderMutation, { variables });
+    let response;
+    try {
+      response = await shopifyClient.request(draftOrderMutation, { variables });
+      console.log('[create-checkout] Shopify response received');
+    } catch (apiError) {
+      console.error('[create-checkout] Shopify API request failed:', {
+        message: apiError.message,
+        stack: apiError.stack
+      });
+      return res.status(500).json({
+        error: 'Shopify API request failed',
+        message: apiError.message
+      });
+    }
 
     console.log('[create-checkout] Shopify response:', JSON.stringify(response, null, 2));
+
+    if (!response || !response.data) {
+      console.error('[create-checkout] Invalid response from Shopify');
+      return res.status(500).json({
+        error: 'Invalid Shopify response',
+        response: response
+      });
+    }
 
     if (response.data?.draftOrderCreate?.userErrors?.length > 0) {
       console.error('[create-checkout] Shopify errors:', response.data.draftOrderCreate.userErrors);
@@ -227,10 +248,14 @@ async function createCheckoutHandler(req, res) {
     const draftOrder = response.data?.draftOrderCreate?.draftOrder;
 
     if (!draftOrder || !draftOrder.invoiceUrl) {
-      console.error('[create-checkout] No draft order or invoice URL returned');
+      console.error('[create-checkout] No draft order or invoice URL returned:', {
+        hasDraftOrder: !!draftOrder,
+        draftOrder: draftOrder
+      });
       return res.status(500).json({
         error: 'Failed to create draft order',
-        message: 'No invoice URL returned from Shopify'
+        message: 'No invoice URL returned from Shopify',
+        response: response.data
       });
     }
 
