@@ -69,7 +69,7 @@ async function createCheckoutHandler(req, res) {
         .from('variants')
         .select(`
           *,
-          product:products(shopify_product_id, title, handle),
+          product:products(shopify_product_id, title, shopify_handle),
           variant_options (
             attribute:attributes (name),
             attribute_value:attribute_values (value)
