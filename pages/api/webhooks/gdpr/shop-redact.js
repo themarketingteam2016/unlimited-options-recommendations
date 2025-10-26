@@ -1,6 +1,5 @@
 import { withWebhookVerification } from '../../../../lib/webhook-verify';
 import { supabaseAdmin } from '../../../../lib/supabase';
-import { deleteSession } from '../../../../lib/shopify-auth';
 
 /**
  * GDPR Webhook: Shop Redact
@@ -47,16 +46,9 @@ async function handler(req, res) {
 
     // Delete ALL shop data from your database
     // IMPORTANT: This must be comprehensive
+    // Note: No OAuth sessions to delete for custom apps
 
-    // 1. Delete OAuth session
-    try {
-      await deleteSession(shop_domain);
-      console.log('[GDPR] ✓ Session deleted');
-    } catch (error) {
-      console.error('[GDPR] Failed to delete session:', error);
-    }
-
-    // 2. Get all products for this shop
+    // 1. Get all products for this shop
     const { data: products } = await supabaseAdmin
       .from('products')
       .select('id, shopify_product_id')
