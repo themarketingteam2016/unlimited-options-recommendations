@@ -7,7 +7,10 @@ export default function Sidebar() {
 
   const isActive = (path) => {
     if (path === '/') {
-      return router.pathname === '/' || router.pathname.startsWith('/products');
+      // Products page can be accessed via /, /auth, or /products/*
+      return router.pathname === '/' ||
+             router.pathname === '/auth' ||
+             router.pathname.startsWith('/products');
     }
     return router.pathname.startsWith(path);
   };
