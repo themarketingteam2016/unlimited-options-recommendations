@@ -168,7 +168,7 @@
               <select class="unlimited-option__select" data-attribute-id="${attr.id}">
                 <option value="">Choose ${attr.name}</option>
                 ${attr.values.map(value => `
-                  <option value="${value.id}">${value.value}</option>
+                  <option value="${value.id}" ${value.is_default ? 'selected' : ''}>${value.value}</option>
                 `).join('')}
               </select>
 
@@ -241,6 +241,7 @@
 
     container.innerHTML = html;
     attachEventListeners();
+    initializeDefaultSelections();
   }
 
   function attachEventListeners() {
@@ -493,6 +494,35 @@
     if (addToCartBtn) {
       addToCartBtn.addEventListener('click', addToCart);
     }
+  }
+
+  function initializeDefaultSelections() {
+    console.log('[Customizer] Initializing default selections');
+
+    // Auto-select default values
+    attributes.forEach(attr => {
+      const defaultValue = attr.values.find(v => v.is_default);
+      if (defaultValue) {
+        selectedOptions[attr.id] = defaultValue.id;
+        console.log(`[Customizer] Auto-selected default for ${attr.name}: ${defaultValue.value}`);
+
+        // Show image preview for default selection
+        const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
+        if (select) {
+          const preview = select.closest('.unlimited-option').querySelector('.unlimited-option__preview');
+          const previewImg = preview?.querySelector('.unlimited-option__image');
+
+          if (preview && previewImg && defaultValue.image_url) {
+            previewImg.src = defaultValue.image_url;
+            previewImg.alt = defaultValue.value;
+            preview.style.display = 'block';
+          }
+        }
+      }
+    });
+
+    // Update variant info to show price and details
+    updateVariant();
   }
 
   function updateVariant() {
