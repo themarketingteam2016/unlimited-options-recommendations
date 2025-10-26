@@ -256,7 +256,10 @@ export default function Home() {
                     )}
                     <h3>{product.title}</h3>
                     <p className={styles.productStatus}>{product.status}</p>
-                    <Link href={`/products/edit?productId=${encodeURIComponent(product.id)}`} className={styles.editButton}>
+                    <Link
+                      href={`/products/edit?productId=${encodeURIComponent(product.id)}&shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`}
+                      className={styles.editButton}
+                    >
                       Edit Variants
                     </Link>
                   </div>
