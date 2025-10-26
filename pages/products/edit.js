@@ -765,7 +765,12 @@ export default function ProductEdit() {
       <main className={styles.main}>
         <div className={styles.header}>
           <div>
-            <Link href="/" className={styles.backLink}>← Back to Products</Link>
+            <Link
+              href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
+              className={styles.backLink}
+            >
+              ← Back to Products
+            </Link>
             <h1>{product.title}</h1>
           </div>
         </div>
