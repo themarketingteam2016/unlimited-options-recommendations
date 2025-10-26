@@ -79,10 +79,19 @@ async function createCheckoutHandler(req, res) {
         .single();
 
       if (variantError || !variant) {
-        console.error('[create-checkout] Variant not found:', item.variantId, variantError);
+        console.error('[create-checkout] Variant query error:', {
+          variantId: item.variantId,
+          error: variantError,
+          errorMessage: variantError?.message,
+          errorDetails: variantError?.details,
+          errorHint: variantError?.hint,
+          errorCode: variantError?.code
+        });
         return res.status(404).json({
           error: 'Variant not found',
-          variantId: item.variantId
+          variantId: item.variantId,
+          details: variantError?.message,
+          hint: variantError?.hint
         });
       }
 
