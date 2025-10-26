@@ -1,172 +1,50 @@
 {% comment %}
-  Product Options & Customizer App Block
-  This block displays custom product options with variant selection
+  Product Customizer Integration
+
+  Usage: Include this snippet in your product template
+  {% render 'product-customizer', product: product %}
 {% endcomment %}
 
-<!-- Hide default Shopify price -->
-<style>
-  /* Hide all Shopify product prices - only show custom variant price */
-  .product__price:not(.unlimited-price),
-  .price:not(.unlimited-price),
-  .product-price:not(.unlimited-price),
-  [data-product-price]:not(.unlimited-price),
-  .product__info-container .price__container:not(.unlimited-price-section),
-  .price__container:not(.unlimited-price-section),
-  .price-item:not(.unlimited-price),
-  .product__price-wrapper:not(.unlimited-price-section),
-  .product-single__price:not(.unlimited-price),
-  .product__pricing:not(.unlimited-price-section),
-  .product-form__price:not(.unlimited-price),
-  [id*="price"]:not(.unlimited-price):not(.unlimited-price-section),
-  [class*="ProductPrice"]:not(.unlimited-price),
-  [data-price]:not(.unlimited-price),
-  .money:not(.unlimited-price) {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  /* Ensure our custom price is always visible */
-  .unlimited-price,
-  .unlimited-price-section,
-  .unlimited-price-section * {
-    display: block !important;
-    visibility: visible !important;
-  }
-</style>
-
-<div id="unlimited-options-customizer-{{ block.id }}" class="unlimited-options-customizer" {{ block.shopify_attributes }}>
-  <div id="customizer-app-root"></div>
+<div id="unlimited-customizer-{{ product.id }}" class="unlimited-customizer" data-product-id="{{ product.id }}">
+  <div class="unlimited-customizer__loading">
+    <div class="spinner"></div>
+    Loading customizer...
+  </div>
 </div>
 
 <script>
-  (function() {
-    const productId = 'gid://shopify/Product/{{ product.id }}';
-    const apiUrl = 'https://unlimtited-options-recommendations.vercel.app';
-    const blockId = '{{ block.id }}';
+(function() {
+  const productId = 'gid://shopify/Product/{{ product.id }}';
+  const container = document.getElementById('unlimited-customizer-{{ product.id }}');
 
-    // Create container for the customizer
-    const container = document.getElementById('unlimited-options-customizer-' + blockId);
-    const root = container.querySelector('#customizer-app-root');
+  // Configuration - Update this with your app URL
+  const APP_URL = 'https://unlimtited-options-recommendations.vercel.app';
 
-    let recommendations = [];
-    let selectedRecommendations = new Set();
-    let recommendationVariantsCache = {};
-    let productDataCache = {};
+  let variants = [];
+  let attributes = [];
+  let selectedOptions = {};
+  let selectedVariant = null;
+  let recommendations = [];
+  let selectedRecommendations = new Set();
+  let recommendationVariantsCache = {};
+  let productDataCache = {};
 
-    // Show loading state
-    root.innerHTML = '<div style="text-align:center;padding:40px;">Loading customizer...</div>';
+  // Fetch product customizer data
+  async function loadCustomizer() {
+    try {
+      // Fetch variants from your API
+      const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
+      const variantsData = await variantsRes.json();
 
-    // Load the customizer widget
-    async function loadCustomizer() {
-      try {
-        console.log('Loading customizer for product:', productId);
-
-        // Fetch variants directly
-        const variantsRes = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/variants`);
-        const variants = await variantsRes.json();
-
-        console.log('Fetched variants:', variants);
-
-        if (!variants || variants.length === 0) {
-          root.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">No custom options available for this product.</div>';
-          return;
-        }
-
-        // Extract attributes
-        const attributes = extractAttributes(variants);
-
-        // Load recommendations
-        await loadRecommendations();
-
-        // Render customizer UI
-        renderCustomizer(variants, attributes);
-
-      } catch (error) {
-        console.error('Error loading customizer:', error);
+      if (!variantsData || variantsData.length === 0) {
+        container.innerHTML = '<p>No custom options available for this product.</p>';
+        return;
       }
-    }
 
-    async function loadRecommendations() {
-      try {
-        const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(productId)}/recommendations`);
+      variants = variantsData;
 
-        if (!response.ok) {
-          recommendations = [];
-          return;
-        }
-
-        const data = await response.json();
-        recommendations = data || [];
-
-        // Fetch variants for each recommended product
-        for (const rec of recommendations) {
-          const product = rec.recommended_product;
-          if (product && product.shopify_product_id) {
-            const handle = product.handle || product.shopify_handle;
-            await fetchProductVariants(product.shopify_product_id, product.id, handle);
-            productDataCache[product.id] = {
-              handle: handle,
-              shopify_product_id: product.shopify_product_id
-            };
-          }
-        }
-      } catch (error) {
-        console.error('Error loading recommendations:', error);
-        recommendations = [];
-      }
-    }
-
-    async function fetchProductVariants(shopifyProductId, internalProductId, productHandle) {
-      try {
-        const response = await fetch(`${apiUrl}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
-        if (response.ok) {
-          const variants = await response.json();
-
-          // Also fetch Shopify product to get first variant ID for fallback mode
-          let shopifyFallbackVariantId = null;
-          if (productHandle) {
-            try {
-              console.log(`[Recommendation] Fetching Shopify product for fallback: /products/${productHandle}.js`);
-              const shopifyResponse = await fetch(`/products/${productHandle}.js`);
-              if (shopifyResponse.ok) {
-                const shopifyProduct = await shopifyResponse.json();
-                shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
-                console.log(`[Recommendation] Fallback variant ID for ${productHandle}:`, shopifyFallbackVariantId);
-              } else {
-                console.warn(`[Recommendation] Failed to fetch product ${productHandle}:`, shopifyResponse.status);
-              }
-            } catch (e) {
-              console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
-            }
-          } else {
-            console.warn('[Recommendation] No product handle provided for fallback variant fetch');
-          }
-
-          recommendationVariantsCache[internalProductId] = {
-            variants: variants || [],
-            shopifyProductId: shopifyProductId,
-            shopifyFallbackVariantId: shopifyFallbackVariantId
-          };
-        } else {
-          recommendationVariantsCache[internalProductId] = {
-            variants: [],
-            shopifyProductId: shopifyProductId,
-            shopifyFallbackVariantId: null
-          };
-        }
-      } catch (error) {
-        console.error('Error fetching variants:', error);
-        recommendationVariantsCache[internalProductId] = {
-          variants: [],
-          shopifyProductId: shopifyProductId,
-          shopifyFallbackVariantId: null
-        };
-      }
-    }
-
-    function extractAttributes(variants) {
+      // Extract unique attributes
       const uniqueAttrs = {};
-
       variants.forEach(variant => {
         variant.variant_options?.forEach(opt => {
           if (opt.attribute) {
@@ -183,470 +61,422 @@
         });
       });
 
-      return Object.values(uniqueAttrs);
+      attributes = Object.values(uniqueAttrs);
+
+      // Load recommendations
+      await loadRecommendations();
+
+      // Render customizer UI
+      renderCustomizer();
+
+    } catch (error) {
+      console.error('Error loading customizer:', error);
+      container.innerHTML = '<p>Error loading product options. Please refresh the page.</p>';
     }
+  }
 
-    function renderCustomizer(variants, attributes) {
-      // Pre-select default values
-      let selectedOptions = {};
-      attributes.forEach(attr => {
-        const defaultValue = attr.values.find(v => v.is_default);
-        if (defaultValue) {
-          selectedOptions[attr.id] = defaultValue.id;
+  async function loadRecommendations() {
+    try {
+      const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/recommendations`);
+
+      if (!response.ok) {
+        recommendations = [];
+        return;
+      }
+
+      const data = await response.json();
+      recommendations = data || [];
+
+      // Fetch variants for each recommended product
+      for (const rec of recommendations) {
+        const product = rec.recommended_product;
+        if (product && product.shopify_product_id) {
+          const handle = product.handle || product.shopify_handle;
+          await fetchProductVariants(product.shopify_product_id, product.id, handle);
+          productDataCache[product.id] = {
+            handle: handle,
+            shopify_product_id: product.shopify_product_id
+          };
         }
-      });
+      }
+    } catch (error) {
+      console.error('Error loading recommendations:', error);
+      recommendations = [];
+    }
+  }
 
-      let selectedVariant = null;
+  async function fetchProductVariants(shopifyProductId, internalProductId, productHandle) {
+    try {
+      const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
+      if (response.ok) {
+        const variants = await response.json();
 
-      // Create HTML structure
-      const html = `
-        <div class="unlimited-options-widget">
-          <div class="unlimited-options-content">
-            ${attributes.map(attr => `
-              <div class="unlimited-option-group" data-attribute-id="${attr.id}">
-                <label class="unlimited-option-label">
-                  ${attr.name}
-                </label>
-                <select class="unlimited-dropdown" data-attribute-id="${attr.id}">
-                  <option value="">Choose ${attr.name}</option>
-                  ${attr.values.map(value => `
-                    <option value="${value.id}" ${selectedOptions[attr.id] === value.id ? 'selected' : ''}>${value.value}</option>
-                  `).join('')}
-                </select>
-                <div class="unlimited-image-preview" style="display: none;">
-                  <img class="unlimited-preview-img" src="" alt="">
-                </div>
+        // Also fetch Shopify product to get first variant ID for fallback mode
+        let shopifyFallbackVariantId = null;
+        if (productHandle) {
+          try {
+            console.log(`[Recommendation] Fetching Shopify product for fallback: /products/${productHandle}.js`);
+            const shopifyResponse = await fetch(`/products/${productHandle}.js`);
+            if (shopifyResponse.ok) {
+              const shopifyProduct = await shopifyResponse.json();
+              shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+              console.log(`[Recommendation] Fallback variant ID for ${productHandle}:`, shopifyFallbackVariantId);
+            } else {
+              console.warn(`[Recommendation] Failed to fetch product ${productHandle}:`, shopifyResponse.status);
+            }
+          } catch (e) {
+            console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
+          }
+        } else {
+          console.warn('[Recommendation] No product handle provided for fallback variant fetch');
+        }
+
+        recommendationVariantsCache[internalProductId] = {
+          variants: variants || [],
+          shopifyProductId: shopifyProductId,
+          shopifyFallbackVariantId: shopifyFallbackVariantId
+        };
+      } else {
+        recommendationVariantsCache[internalProductId] = {
+          variants: [],
+          shopifyProductId: shopifyProductId,
+          shopifyFallbackVariantId: null
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching variants:', error);
+      recommendationVariantsCache[internalProductId] = {
+        variants: [],
+        shopifyProductId: shopifyProductId,
+        shopifyFallbackVariantId: null
+      };
+    }
+  }
+
+  function renderCustomizer() {
+    const html = `
+      <div class="unlimited-customizer__content">
+        <h3 class="unlimited-customizer__title">Customize Your Product</h3>
+
+        <div class="unlimited-customizer__options">
+          ${attributes.map(attr => `
+            <div class="unlimited-option" data-attribute-id="${attr.id}">
+              <label class="unlimited-option__label">
+                ${attr.name}
+              </label>
+
+              <select class="unlimited-option__select" data-attribute-id="${attr.id}">
+                <option value="">Choose ${attr.name}</option>
+                ${attr.values.map(value => `
+                  <option value="${value.id}">${value.value}</option>
+                `).join('')}
+              </select>
+
+              <div class="unlimited-option__preview" style="display: none;">
+                <img class="unlimited-option__image" src="" alt="">
               </div>
-            `).join('')}
-
-            <div class="unlimited-price-section" style="display: none;">
-              <div class="unlimited-price"></div>
             </div>
-
-            ${recommendations.length > 0 ? `
-              <div class="unlimited-recommendations">
-                <h4 class="unlimited-recommendations__title">You May Also Like</h4>
-                <div class="unlimited-recommendations__grid">
-                  ${recommendations.map(rec => {
-                    const product = rec.recommended_product;
-                    if (!product) return '';
-
-                    const imageUrl = product.featuredImage?.url || product.image_url || '';
-
-                    // Get the first variant's price as base price
-                    const cachedData = recommendationVariantsCache[product.id];
-                    const firstVariant = cachedData?.variants?.[0];
-                    const price = firstVariant?.price ? `$${firstVariant.price}` : '';
-
-                    return `
-                      <div class="unlimited-recommendation-item" data-product-id="${product.id}">
-                        <input
-                          type="checkbox"
-                          class="unlimited-recommendation-checkbox"
-                          id="rec-${blockId}-${product.id}"
-                          data-product-id="${product.id}"
-                          data-product-name="${product.title}"
-                        >
-                        <label for="rec-${blockId}-${product.id}" class="unlimited-recommendation-label">
-                          ${imageUrl ? `
-                            <img src="${imageUrl}" alt="${product.title}" class="unlimited-recommendation-image">
-                          ` : `
-                            <div class="unlimited-recommendation-image unlimited-recommendation-placeholder">
-                              <span>No Image</span>
-                            </div>
-                          `}
-                          <div class="unlimited-recommendation-info">
-                            <div class="unlimited-recommendation-name">${product.title}</div>
-                            ${price ? `<div class="unlimited-recommendation-price">${price}</div>` : ''}
-                          </div>
-                        </label>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            ` : ''}
-
-            <button type="button" class="unlimited-add-to-cart" disabled>
-              Select All Options
-            </button>
-
-            <div class="unlimited-sku" style="display: none;"></div>
-          </div>
+          `).join('')}
         </div>
-      `;
 
-      root.innerHTML = html;
+        <div class="unlimited-customizer__variant-info" style="display: none;">
+          <div class="unlimited-variant-price"></div>
+          <div class="unlimited-variant-sku" style="display: none;"></div>
+        </div>
 
-      // Show default value images if available
-      attributes.forEach(attr => {
-        if (selectedOptions[attr.id]) {
-          const value = attr.values.find(v => v.id === selectedOptions[attr.id]);
+        ${recommendations.length > 0 ? `
+          <div class="unlimited-recommendations">
+            <h4 class="unlimited-recommendations__title">You May Also Like</h4>
+            <div class="unlimited-recommendations__grid">
+              ${recommendations.map(rec => {
+                const product = rec.recommended_product;
+                if (!product) return '';
+
+                const imageUrl = product.featuredImage?.url || product.image_url || '';
+
+                // Get the first variant's price as base price
+                const cachedData = recommendationVariantsCache[product.id];
+                const firstVariant = cachedData?.variants?.[0];
+                const price = firstVariant?.price ? `$${firstVariant.price}` : '';
+
+                return `
+                  <div class="unlimited-recommendation-item" data-product-id="${product.id}">
+                    <input
+                      type="checkbox"
+                      class="unlimited-recommendation-checkbox"
+                      id="rec-${product.id}"
+                      data-product-id="${product.id}"
+                      data-product-name="${product.title}"
+                    >
+                    <label for="rec-${product.id}" class="unlimited-recommendation-label">
+                      ${imageUrl ? `
+                        <img src="${imageUrl}" alt="${product.title}" class="unlimited-recommendation-image">
+                      ` : `
+                        <div class="unlimited-recommendation-image unlimited-recommendation-placeholder">
+                          <span>No Image</span>
+                        </div>
+                      `}
+                      <div class="unlimited-recommendation-info">
+                        <div class="unlimited-recommendation-name">${product.title}</div>
+                        ${price ? `<div class="unlimited-recommendation-price">${price}</div>` : ''}
+                      </div>
+                    </label>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="unlimited-customizer__actions">
+          <button type="button" class="unlimited-buy-now btn btn-primary" disabled>
+            Select All Options
+          </button>
+          <button type="button" class="unlimited-add-to-cart btn btn-secondary" disabled style="display: none;">
+            Add to Cart (Preview)
+          </button>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+    attachEventListeners();
+  }
+
+  function attachEventListeners() {
+    // Dropdown change handlers
+    const selects = container.querySelectorAll('.unlimited-option__select');
+    selects.forEach(select => {
+      select.addEventListener('change', function() {
+        const attrId = this.dataset.attributeId;
+        const valueId = this.value;
+
+        if (valueId) {
+          selectedOptions[attrId] = valueId;
+
+          // Show image preview
+          const attr = attributes.find(a => a.id === attrId);
+          const value = attr?.values.find(v => v.id === valueId);
+          const preview = this.closest('.unlimited-option').querySelector('.unlimited-option__preview');
+          const previewImg = preview.querySelector('.unlimited-option__image');
+
           if (value?.image_url) {
-            const optionGroup = root.querySelector(`[data-attribute-id="${attr.id}"]`);
-            const preview = optionGroup.querySelector('.unlimited-image-preview');
-            const previewImg = optionGroup.querySelector('.unlimited-preview-img');
             previewImg.src = value.image_url;
             previewImg.alt = value.value;
             preview.style.display = 'block';
+          } else {
+            preview.style.display = 'none';
           }
+        } else {
+          delete selectedOptions[attrId];
         }
+
+        updateVariant();
       });
+    });
 
-      // Update variant for default selections
-      updateVariant(variants, attributes);
+    // Recommendation checkbox handlers
+    const recCheckboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+    recCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        const productId = this.dataset.productId;
 
-      // Add event listeners
-      const dropdowns = root.querySelectorAll('.unlimited-dropdown');
-      dropdowns.forEach(dropdown => {
-        dropdown.addEventListener('change', function() {
-          const attrId = this.dataset.attributeId;
-          const valueId = this.value;
+        if (this.checked) {
+          selectedRecommendations.add(productId);
+        } else {
+          selectedRecommendations.delete(productId);
+        }
 
-          if (valueId) {
-            selectedOptions[attrId] = valueId;
-
-            // Show image preview if available
-            const attr = attributes.find(a => a.id === attrId);
-            const value = attr?.values.find(v => v.id === valueId);
-            const preview = this.parentElement.querySelector('.unlimited-image-preview');
-            const previewImg = this.parentElement.querySelector('.unlimited-preview-img');
-
-            if (value?.image_url) {
-              previewImg.src = value.image_url;
-              previewImg.alt = value.value;
-              preview.style.display = 'block';
-            } else {
-              preview.style.display = 'none';
-            }
-          } else {
-            delete selectedOptions[attrId];
-          }
-
-          updateVariant(variants, attributes);
-        });
+        updateVariant();
+        updateRecommendationPreview();
       });
+    });
 
-      // Recommendation checkbox handlers
-      const recCheckboxes = root.querySelectorAll('.unlimited-recommendation-checkbox');
-      recCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-          const productId = this.dataset.productId;
+    // Function to show what options will be selected for recommendations
+    function updateRecommendationPreview() {
+      const previewContainer = container.querySelector('.unlimited-bundle-preview');
 
-          if (this.checked) {
-            selectedRecommendations.add(productId);
-          } else {
-            selectedRecommendations.delete(productId);
-          }
+      if (selectedRecommendations.size === 0) {
+        if (previewContainer) {
+          previewContainer.style.display = 'none';
+        }
+        return;
+      }
 
-          updateVariant(variants, attributes);
-          updateRecommendationPreview();
-        });
-      });
+      if (!previewContainer) {
+        const previewDiv = document.createElement('div');
+        previewDiv.className = 'unlimited-bundle-preview';
+        const actionsSection = container.querySelector('.unlimited-customizer__actions');
+        actionsSection.parentNode.insertBefore(previewDiv, actionsSection);
+      }
 
-      // Function to show what options will be selected for recommendations
-      function updateRecommendationPreview() {
-        const previewContainer = root.querySelector('.unlimited-bundle-preview');
+      const preview = container.querySelector('.unlimited-bundle-preview');
+      const mainSelections = getMainProductSelections();
 
-        if (selectedRecommendations.size === 0) {
-          if (previewContainer) {
-            previewContainer.style.display = 'none';
-          }
+      let previewHTML = `
+        <div class="unlimited-bundle-preview__title">Bundle Items (${selectedRecommendations.size + 1} products):</div>
+        <div class="unlimited-bundle-preview__items">
+          <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--main">
+            <strong>Main Product:</strong> Selected options will be added
+          </div>
+      `;
+
+      selectedRecommendations.forEach(productId => {
+        const cachedData = recommendationVariantsCache[productId];
+        const recVariants = cachedData?.variants || [];
+        const recommendation = recommendations.find(r => r.recommended_product.id === productId);
+        const productName = recommendation?.recommended_product?.title || 'Recommended Product';
+
+        if (recVariants.length === 0) {
+          previewHTML += `
+            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
+              <strong>${productName}:</strong> <span class="unlimited-error">No variants available</span>
+            </div>
+          `;
           return;
         }
 
-        if (!previewContainer) {
-          // Create preview container if it doesn't exist
-          const previewDiv = document.createElement('div');
-          previewDiv.className = 'unlimited-bundle-preview';
-          const actionsSection = root.querySelector('.unlimited-add-to-cart');
-          actionsSection.parentNode.insertBefore(previewDiv, actionsSection);
-        }
+        const recAttributes = extractAttributes(recVariants);
+        const preFilledSelections = {};
+        const selectionDetails = [];
 
-        const preview = root.querySelector('.unlimited-bundle-preview');
-        const mainSelections = getMainProductSelections();
+        recAttributes.forEach(attr => {
+          const matchingMainSelection = Object.values(mainSelections).find(sel =>
+            sel.attrName && attr.name &&
+            sel.attrName.toLowerCase() === attr.name.toLowerCase()
+          );
 
-        let previewHTML = `
-          <div class="unlimited-bundle-preview__title">Bundle Items (${selectedRecommendations.size + 1} products):</div>
-          <div class="unlimited-bundle-preview__items">
-            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--main">
-              <strong>Main Product:</strong> Selected options will be added
-            </div>
-        `;
+          let selectedValueText = '';
+          let matchType = '';
 
-        selectedRecommendations.forEach(productId => {
-          const cachedData = recommendationVariantsCache[productId];
-          const recVariants = cachedData?.variants || [];
-          const recommendation = recommendations.find(r => r.recommended_product.id === productId);
-          const productName = recommendation?.recommended_product?.title || 'Recommended Product';
-
-          if (recVariants.length === 0) {
-            previewHTML += `
-              <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
-                <strong>${productName}:</strong> <span class="unlimited-error">No variants available</span>
-              </div>
-            `;
-            return;
-          }
-
-          const recAttributes = extractAttributes(recVariants);
-          const preFilledSelections = {};
-          const selectionDetails = [];
-
-          recAttributes.forEach(attr => {
-            const matchingMainSelection = Object.values(mainSelections).find(sel =>
-              sel.attrName && attr.name &&
-              sel.attrName.toLowerCase() === attr.name.toLowerCase()
+          if (matchingMainSelection) {
+            const matchedValueId = findMatchingValue(
+              { valueText: matchingMainSelection.valueText },
+              attr.values
             );
 
-            let selectedValueText = '';
-            let matchType = '';
+            if (matchedValueId) {
+              preFilledSelections[attr.id] = matchedValueId;
+              const matchedValue = attr.values.find(v => v.id === matchedValueId);
+              selectedValueText = matchedValue?.value || '';
 
-            if (matchingMainSelection) {
-              const matchedValueId = findMatchingValue(
-                { valueText: matchingMainSelection.valueText },
-                attr.values
-              );
-
-              if (matchedValueId) {
-                preFilledSelections[attr.id] = matchedValueId;
-                const matchedValue = attr.values.find(v => v.id === matchedValueId);
-                selectedValueText = matchedValue?.value || '';
-
-                if (matchedValue?.value.toLowerCase() === matchingMainSelection.valueText.toLowerCase()) {
-                  matchType = 'exact';
-                } else {
-                  matchType = 'nearest';
-                }
-              }
-            } else {
-              const defaultValue = attr.values.find(v => v.is_default);
-              if (defaultValue) {
-                preFilledSelections[attr.id] = defaultValue.id;
-                selectedValueText = defaultValue.value;
-                matchType = 'default';
+              if (matchedValue?.value.toLowerCase() === matchingMainSelection.valueText.toLowerCase()) {
+                matchType = 'exact';
+              } else {
+                matchType = 'nearest';
               }
             }
-
-            if (selectedValueText) {
-              selectionDetails.push({
-                attrName: attr.name,
-                value: selectedValueText,
-                matchType: matchType
-              });
-            }
-          });
-
-          const matchedVariant = recVariants.find(variant => {
-            return variant.variant_options?.every(opt =>
-              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-            );
-          });
-
-          if (matchedVariant) {
-            previewHTML += `
-              <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--success">
-                <strong>${productName}:</strong>
-                <div class="unlimited-bundle-preview__options">
-                  ${selectionDetails.map(detail => `
-                    <span class="unlimited-bundle-option">
-                      ${detail.attrName}: ${detail.value}
-                      ${detail.matchType === 'exact' ? '<span class="unlimited-match-badge">✓</span>' : ''}
-                      ${detail.matchType === 'nearest' ? '<span class="unlimited-match-badge unlimited-match-badge--nearest">~</span>' : ''}
-                      ${detail.matchType === 'default' ? '<span class="unlimited-match-badge unlimited-match-badge--default">default</span>' : ''}
-                    </span>
-                  `).join('')}
-                </div>
-              </div>
-            `;
           } else {
-            previewHTML += `
-              <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
-                <strong>${productName}:</strong> <span class="unlimited-error">No matching variant found</span>
-              </div>
-            `;
-          }
-        });
-
-        previewHTML += `
-          </div>
-          <div class="unlimited-bundle-preview__note">
-            <small>✓ = Exact match | ~ = Nearest match | default = Using default value</small>
-          </div>
-        `;
-
-        preview.innerHTML = previewHTML;
-        preview.style.display = 'block';
-      }
-
-      // Get main product selections for smart pre-fill
-      function getMainProductSelections() {
-        const selections = {};
-
-        attributes.forEach(attr => {
-          const valueId = selectedOptions[attr.id];
-          if (valueId) {
-            const value = attr.values.find(v => v.id === valueId);
-            if (value) {
-              selections[attr.id] = {
-                valueId: valueId,
-                attrName: attr.name,
-                valueText: value.value
-              };
+            const defaultValue = attr.values.find(v => v.is_default);
+            if (defaultValue) {
+              preFilledSelections[attr.id] = defaultValue.id;
+              selectedValueText = defaultValue.value;
+              matchType = 'default';
             }
           }
-        });
 
-        return selections;
-      }
-
-      // Find matching or nearest attribute value
-      function findMatchingValue(mainSelection, availableValues) {
-        if (!mainSelection || !availableValues || availableValues.length === 0) {
-          return null;
-        }
-
-        // First try: Exact match by value text (case-insensitive)
-        const exactMatch = availableValues.find(v =>
-          v.value.toLowerCase() === mainSelection.valueText.toLowerCase()
-        );
-        if (exactMatch) return exactMatch.id;
-
-        // Second try: Partial match (contains)
-        const partialMatch = availableValues.find(v =>
-          v.value.toLowerCase().includes(mainSelection.valueText.toLowerCase()) ||
-          mainSelection.valueText.toLowerCase().includes(v.value.toLowerCase())
-        );
-        if (partialMatch) return partialMatch.id;
-
-        // Third try: For numeric values, find nearest (e.g., carat weight)
-        const mainValue = parseFloat(mainSelection.valueText);
-        if (!isNaN(mainValue)) {
-          const numericValues = availableValues
-            .map(v => ({ ...v, numeric: parseFloat(v.value) }))
-            .filter(v => !isNaN(v.numeric));
-
-          if (numericValues.length > 0) {
-            const nearest = numericValues.reduce((prev, curr) =>
-              Math.abs(curr.numeric - mainValue) < Math.abs(prev.numeric - mainValue) ? curr : prev
-            );
-            return nearest.id;
-          }
-        }
-
-        // No match found - return default or first
-        const defaultValue = availableValues.find(v => v.is_default);
-        return defaultValue?.id || null;
-      }
-
-      // Add to cart button with bundle support
-      root.querySelector('.unlimited-add-to-cart').addEventListener('click', async () => {
-        if (!selectedVariant) return;
-
-        const addToCartBtn = root.querySelector('.unlimited-add-to-cart');
-        addToCartBtn.disabled = true;
-        addToCartBtn.textContent = 'Adding...';
-
-        try {
-          const itemsToAdd = [];
-
-          console.log('[Bundle Add] Starting bundle add to cart', {
-            mainVariant: selectedVariant.id,
-            selectedRecommendations: Array.from(selectedRecommendations)
-          });
-
-          // Add main product via API
-          const apiResponse = await fetch(`${apiUrl}/api/cart/add-variant`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              variantId: selectedVariant.id,
-              quantity: 1
-            })
-          });
-
-          if (!apiResponse.ok) {
-            const error = await apiResponse.json();
-            throw new Error(error.error || 'Failed to prepare cart');
-          }
-
-          const apiData = await apiResponse.json();
-          console.log('[Bundle Add] Main product API response:', apiData);
-
-          if (apiData.success && apiData.cartData) {
-            itemsToAdd.push(apiData.cartData);
-          } else if (apiData.fallback && apiData.variant) {
-            const productVariantId = {{ product.variants.first.id }};
-            console.log('[Bundle Add] Using fallback mode for main product');
-            console.log('[Bundle Add] Shopify variant ID:', productVariantId);
-            console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
-
-            // Use properties from API response if available, otherwise build them
-            const properties = apiData.variant.properties || {
-              '_Custom_Variant': 'Yes',
-              '_SKU': apiData.variant.sku || 'Custom',
-              '_Price': `$${apiData.variant.price}`
-            };
-
-            // Add options if not already in properties
-            if (!apiData.variant.properties) {
-              apiData.variant.options?.forEach(opt => {
-                properties[opt.name] = opt.value;
-              });
-            }
-
-            itemsToAdd.push({
-              id: productVariantId,
-              quantity: 1,
-              properties: properties
+          if (selectedValueText) {
+            selectionDetails.push({
+              attrName: attr.name,
+              value: selectedValueText,
+              matchType: matchType
             });
-
-            console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
-          } else {
-            console.error('[Bundle Add] Unexpected API response format:', apiData);
-            throw new Error('Invalid API response format');
           }
+        });
 
-          // Handle recommendations with smart pre-fill if any selected
-          console.log('[Bundle Add] Checking recommendations...', {
-            selectedRecommendationsSize: selectedRecommendations.size,
-            selectedRecommendations: Array.from(selectedRecommendations)
-          });
+        const matchedVariant = recVariants.find(variant => {
+          return variant.variant_options?.every(opt =>
+            preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+          );
+        });
 
-          if (selectedRecommendations.size > 0) {
-            const mainSelections = getMainProductSelections();
-            console.log('[Bundle Add] Processing bundle with recommendations');
-            console.log('[Bundle Add] Main selections:', mainSelections);
+        if (matchedVariant) {
+          previewHTML += `
+            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--success">
+              <strong>${productName}:</strong>
+              <div class="unlimited-bundle-preview__options">
+                ${selectionDetails.map(detail => `
+                  <span class="unlimited-bundle-option">
+                    ${detail.attrName}: ${detail.value}
+                    ${detail.matchType === 'exact' ? '<span class="unlimited-match-badge">✓</span>' : ''}
+                    ${detail.matchType === 'nearest' ? '<span class="unlimited-match-badge unlimited-match-badge--nearest">~</span>' : ''}
+                    ${detail.matchType === 'default' ? '<span class="unlimited-match-badge unlimited-match-badge--default">default</span>' : ''}
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          previewHTML += `
+            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
+              <strong>${productName}:</strong> <span class="unlimited-error">No matching variant found</span>
+            </div>
+          `;
+        }
+      });
 
-            const recommendationErrors = [];
+      previewHTML += `
+        </div>
+        <div class="unlimited-bundle-preview__note">
+          <small>✓ = Exact match | ~ = Nearest match | default = Using default value</small>
+        </div>
+      `;
 
-            console.log('[Bundle Add] About to loop through',  selectedRecommendations.size, 'recommendations');
+      preview.innerHTML = previewHTML;
+      preview.style.display = 'block';
+    }
 
-            for (const productId of selectedRecommendations) {
-              console.log('[Bundle Add] Processing recommendation:', productId);
+    // Buy Now button (primary action)
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
+    buyNowBtn.addEventListener('click', buyNow);
 
-              const cachedData = recommendationVariantsCache[productId];
-              const recVariants = cachedData?.variants || [];
+    // Add to cart button (secondary/hidden)
+    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
+    if (addToCartBtn) {
+      addToCartBtn.addEventListener('click', addToCart);
+    }
+  }
 
-              console.log('[Bundle Add] Recommendation variants:', {
-                productId,
-                variantCount: recVariants.length,
-                variants: recVariants
-              });
+  function updateVariant() {
+    const variantInfo = container.querySelector('.unlimited-customizer__variant-info');
+    const priceEl = container.querySelector('.unlimited-variant-price');
+    const skuEl = container.querySelector('.unlimited-variant-sku');
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
+    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
 
-              if (recVariants.length === 0) {
-                recommendationErrors.push(`Product ${productId} has no variants`);
-                continue;
-              }
+    // Check if all options selected
+    const allSelected = attributes.every(attr => selectedOptions[attr.id]);
 
-              // Extract attributes for this recommendation
+    if (allSelected) {
+      // Find matching variant
+      const match = variants.find(variant => {
+        return variant.variant_options?.every(opt =>
+          selectedOptions[opt.attribute.id] === opt.attribute_value.id
+        );
+      });
+
+      selectedVariant = match || null;
+
+      if (selectedVariant) {
+        // Show variant info
+        variantInfo.style.display = 'block';
+
+        // Calculate bundle price if recommendations selected
+        let totalPrice = parseFloat(selectedVariant.price);
+
+        if (selectedRecommendations.size > 0) {
+          const mainSelections = getMainProductSelections();
+          let recommendationsPriceTotal = 0;
+
+          selectedRecommendations.forEach(productId => {
+            const cachedData = recommendationVariantsCache[productId];
+            const recVariants = cachedData?.variants || [];
+
+            if (recVariants.length > 0) {
               const recAttributes = extractAttributes(recVariants);
-
-              // Build pre-filled selections
               const preFilledSelections = {};
 
               recAttributes.forEach(attr => {
-                // Try to match with main product selections
                 const matchingMainSelection = Object.values(mainSelections).find(sel =>
                   sel.attrName && attr.name &&
                   sel.attrName.toLowerCase() === attr.name.toLowerCase()
@@ -657,12 +487,10 @@
                     { valueText: matchingMainSelection.valueText },
                     attr.values
                   );
-
                   if (matchedValueId) {
                     preFilledSelections[attr.id] = matchedValueId;
                   }
                 } else {
-                  // No match, use default or first
                   const defaultValue = attr.values.find(v => v.is_default);
                   if (defaultValue) {
                     preFilledSelections[attr.id] = defaultValue.id;
@@ -670,740 +498,961 @@
                 }
               });
 
-              console.log('[Bundle Add] Pre-filled selections:', preFilledSelections);
-
-              // Find matching variant from pre-filled selections
               const matchedVariant = recVariants.find(variant => {
                 return variant.variant_options?.every(opt =>
                   preFilledSelections[opt.attribute.id] === opt.attribute_value.id
                 );
               });
 
-              console.log('[Bundle Add] Matched variant:', matchedVariant);
-
-              if (matchedVariant) {
-                // Add recommendation variant via API
-                const recApiResponse = await fetch(`${apiUrl}/api/cart/add-variant`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    variantId: matchedVariant.id,
-                    quantity: 1
-                  })
-                });
-
-                if (recApiResponse.ok) {
-                  const recApiData = await recApiResponse.json();
-                  console.log('[Bundle Add] Recommendation API response:', recApiData);
-
-                  if (recApiData.success && recApiData.cartData) {
-                    itemsToAdd.push(recApiData.cartData);
-                    console.log('[Bundle Add] Added recommendation to cart items:', recApiData.cartData);
-                  } else if (recApiData.fallback && recApiData.variant) {
-                    // Handle fallback mode for recommendations
-                    console.log('[Bundle Add] Using fallback mode for recommendation');
-
-                    const cachedData = recommendationVariantsCache[productId];
-                    const fallbackVariantId = cachedData?.shopifyFallbackVariantId;
-
-                    if (fallbackVariantId) {
-                      // Use properties from API response if available
-                      const properties = recApiData.variant.properties || {
-                        '_Custom_Variant': 'Yes',
-                        '_SKU': recApiData.variant.sku || 'Custom',
-                        '_Price': `$${recApiData.variant.price}`
-                      };
-
-                      // Add options if not already in properties
-                      if (!recApiData.variant.properties) {
-                        recApiData.variant.options?.forEach(opt => {
-                          properties[opt.name] = opt.value;
-                        });
-                      }
-
-                      itemsToAdd.push({
-                        id: fallbackVariantId,
-                        quantity: 1,
-                        properties: properties
-                      });
-
-                      console.log('[Bundle Add] Added recommendation in fallback mode:', {
-                        id: fallbackVariantId,
-                        properties: properties
-                      });
-                    } else {
-                      console.error('[Bundle Add] No fallback variant ID available for recommendation');
-                      recommendationErrors.push(`Recommendation ${productId}: No fallback variant ID`);
-                    }
-                  } else {
-                    console.error('[Bundle Add] Unexpected recommendation API response:', recApiData);
-                    recommendationErrors.push(`Recommendation ${productId}: Invalid API response`);
-                  }
-                } else {
-                  const recError = await recApiResponse.json();
-                  console.error('[Bundle Add] Recommendation API error:', recError);
-                  recommendationErrors.push(`Failed to add recommendation ${productId}: ${recError.error}`);
-                }
-              } else {
-                recommendationErrors.push(`No matching variant found for product ${productId}`);
+              if (matchedVariant && matchedVariant.price) {
+                recommendationsPriceTotal += parseFloat(matchedVariant.price);
               }
             }
-
-            if (recommendationErrors.length > 0) {
-              console.warn('[Bundle Add] Some recommendations failed:', recommendationErrors);
-            }
-          }
-
-          console.log('[Bundle Add] Final items to add:', itemsToAdd);
-          console.log('[Bundle Add] Number of items to add:', itemsToAdd.length);
-
-          // Validate all items have valid IDs
-          const invalidItems = itemsToAdd.filter(item => !item.id || item.id === '0' || item.id === 0);
-          if (invalidItems.length > 0) {
-            console.error('[Bundle Add] Invalid items detected:', invalidItems);
-            throw new Error(`${invalidItems.length} items have invalid variant IDs`);
-          }
-
-          // Add all items to cart
-          console.log('[Bundle Add] Sending request to /cart/add.js...');
-          const cartResponse = await fetch('/cart/add.js', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: itemsToAdd })
           });
 
-          console.log('[Bundle Add] Cart response status:', cartResponse.status);
-          console.log('[Bundle Add] Cart response ok:', cartResponse.ok);
-
-          const cartResponseText = await cartResponse.text();
-          console.log('[Bundle Add] Raw cart response:', cartResponseText);
-
-          let cartData;
-          try {
-            cartData = JSON.parse(cartResponseText);
-          } catch (e) {
-            console.error('[Bundle Add] Failed to parse cart response:', e);
-            throw new Error('Invalid cart response format');
-          }
-
-          if (!cartResponse.ok) {
-            console.error('[Bundle Add] Cart add error:', cartData);
-            console.error('[Bundle Add] Error description:', cartData.description);
-            console.error('[Bundle Add] Error message:', cartData.message);
-            throw new Error(cartData.description || cartData.message || 'Failed to add to cart');
-          }
-
-          console.log('[Bundle Add] Cart add success:', cartData);
-          console.log('[Bundle Add] Items actually added:', cartData.items?.length || 'unknown');
-
-          // Success!
-          addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
-          addToCartBtn.style.background = '#28a745';
-
-          // Clear recommendation selections
-          selectedRecommendations.clear();
-          const checkboxes = root.querySelectorAll('.unlimited-recommendation-checkbox');
-          checkboxes.forEach(cb => cb.checked = false);
-
-          // Hide bundle preview
-          const bundlePreview = root.querySelector('.unlimited-bundle-preview');
-          if (bundlePreview) {
-            bundlePreview.style.display = 'none';
-          }
-
-          // Trigger multiple cart update events to ensure refresh
-          document.dispatchEvent(new CustomEvent('cart:updated'));
-          document.dispatchEvent(new CustomEvent('cart:refresh'));
-          document.dispatchEvent(new CustomEvent('cart:changed'));
-
-          // Additional common theme cart events
-          document.dispatchEvent(new CustomEvent('product:added'));
-          document.dispatchEvent(new CustomEvent('ajaxCart:added'));
-
-          // jQuery events (for themes using jQuery)
-          if (typeof jQuery !== 'undefined') {
-            jQuery(document).trigger('cart.updated');
-            jQuery(document).trigger('ajaxCart.added');
-          }
-
-          // Trigger Shopify theme cart updates
-          if (typeof window.Shopify !== 'undefined') {
-            if (window.Shopify.onCartUpdate) {
-              window.Shopify.onCartUpdate();
-            }
-            if (window.Shopify.onItemAdded) {
-              window.Shopify.onItemAdded();
-            }
-          }
-
-          // Try to refresh cart drawer/section if available
-          fetch('/cart.js')
-            .then(r => r.json())
-            .then(cart => {
-              document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
-
-              // Update cart count in header/bubble
-              const cartCount = cart.item_count;
-              console.log('[Bundle Add] Cart item count:', cartCount);
-
-              // Try to update cart count elements
-              const cartCountElements = document.querySelectorAll('[data-cart-count], .cart-count, #CartCount, .cart-link__bubble');
-              cartCountElements.forEach(el => {
-                el.textContent = cartCount;
-                if (cartCount > 0) {
-                  el.style.display = '';
-                  el.classList.remove('hidden');
-                  el.classList.add('visible');
-                }
-              });
-
-              // Try to open cart drawer - multiple methods for different themes
-              const cartDrawerComponent = document.querySelector('cart-drawer-component');
-              if (cartDrawerComponent) {
-                // For Shopify's cart-drawer-component
-                const dialog = cartDrawerComponent.querySelector('dialog');
-                if (dialog && dialog.showModal) {
-                  dialog.showModal();
-                  console.log('[Bundle Add] Opened cart drawer via showModal');
-                } else {
-                  // Try clicking the cart button to trigger the drawer
-                  const cartButton = document.querySelector('cart-drawer-component button[aria-haspopup="dialog"]');
-                  if (cartButton) {
-                    cartButton.click();
-                    console.log('[Bundle Add] Opened cart drawer via button click');
-                  }
-                }
-              } else {
-                // Fallback for other drawer types
-                const cartDrawer = document.querySelector('cart-drawer, [data-cart-drawer], .cart-drawer, #CartDrawer');
-                if (cartDrawer) {
-                  if (cartDrawer.open) {
-                    cartDrawer.open();
-                  } else if (cartDrawer.classList) {
-                    cartDrawer.classList.add('active', 'is-open');
-                  }
-                  console.log('[Bundle Add] Opened cart drawer via fallback method');
-                }
-              }
-
-              console.log('[Bundle Add] Cart refreshed:', cart);
-            })
-            .catch(e => console.error('[Bundle Add] Cart refresh error:', e));
-
-          // Reset after 2 seconds
-          setTimeout(() => {
-            addToCartBtn.textContent = 'Add to Cart';
-            addToCartBtn.style.background = '#008060';
-            addToCartBtn.disabled = false;
-          }, 2000);
-
-        } catch (error) {
-          console.error('[Bundle Add] Error adding to cart:', error);
-          addToCartBtn.textContent = 'Error - Try Again';
-          addToCartBtn.style.background = '#dc3545';
-
-          alert(`Failed to add to cart: ${error.message}\n\nCheck console for details.`);
-
-          setTimeout(() => {
-            const hasRecommendations = selectedRecommendations.size > 0;
-            addToCartBtn.textContent = hasRecommendations ? 'Add Bundle to Cart' : 'Add to Cart';
-            addToCartBtn.style.background = '#008060';
-            addToCartBtn.disabled = false;
-          }, 3000);
-        }
-      });
-
-      function updateVariant(variants, attributes) {
-        // Find matching variant
-        const match = variants.find(variant => {
-          return variant.variant_options?.every(opt =>
-            selectedOptions[opt.attribute.id] === opt.attribute_value.id
-          );
-        });
-
-        selectedVariant = match || null;
-
-        // Update UI
-        const priceSection = root.querySelector('.unlimited-price-section');
-        const priceEl = root.querySelector('.unlimited-price');
-        const skuEl = root.querySelector('.unlimited-sku');
-        const addToCartBtn = root.querySelector('.unlimited-add-to-cart');
-
-        const allSelected = attributes.every(attr => selectedOptions[attr.id]);
-
-        if (selectedVariant) {
-          priceSection.style.display = 'flex';
-
-          // Calculate bundle price if recommendations selected
-          let totalPrice = parseFloat(selectedVariant.price);
-          let priceBreakdown = `Main Product: $${selectedVariant.price}`;
-
-          if (selectedRecommendations.size > 0) {
-            const mainSelections = getMainProductSelections();
-            let recommendationsPriceTotal = 0;
-            const recPrices = [];
-
-            selectedRecommendations.forEach(productId => {
-              const cachedData = recommendationVariantsCache[productId];
-              const recVariants = cachedData?.variants || [];
-
-              if (recVariants.length > 0) {
-                // Extract attributes and match variant
-                const recAttributes = extractAttributes(recVariants);
-                const preFilledSelections = {};
-
-                recAttributes.forEach(attr => {
-                  const matchingMainSelection = Object.values(mainSelections).find(sel =>
-                    sel.attrName && attr.name &&
-                    sel.attrName.toLowerCase() === attr.name.toLowerCase()
-                  );
-
-                  if (matchingMainSelection) {
-                    const matchedValueId = findMatchingValue(
-                      { valueText: matchingMainSelection.valueText },
-                      attr.values
-                    );
-                    if (matchedValueId) {
-                      preFilledSelections[attr.id] = matchedValueId;
-                    }
-                  } else {
-                    const defaultValue = attr.values.find(v => v.is_default);
-                    if (defaultValue) {
-                      preFilledSelections[attr.id] = defaultValue.id;
-                    }
-                  }
-                });
-
-                const matchedVariant = recVariants.find(variant => {
-                  return variant.variant_options?.every(opt =>
-                    preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-                  );
-                });
-
-                if (matchedVariant && matchedVariant.price) {
-                  const price = parseFloat(matchedVariant.price);
-                  recommendationsPriceTotal += price;
-                  recPrices.push(price);
-                }
-              }
-            });
-
-            totalPrice += recommendationsPriceTotal;
-            priceEl.innerHTML = `
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <div style="font-size: 24px; font-weight: 700; color: #008060;">
-                  Bundle Total: $${totalPrice.toFixed(2)}
-                </div>
-                <div style="font-size: 12px; color: #666;">
-                  Main: $${selectedVariant.price} + ${selectedRecommendations.size} item${selectedRecommendations.size > 1 ? 's' : ''}: $${recommendationsPriceTotal.toFixed(2)}
-                </div>
+          totalPrice += recommendationsPriceTotal;
+          priceEl.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-size: 24px; font-weight: 700; color: #008060;">
+                Bundle Total: $${totalPrice.toFixed(2)}
               </div>
-            `;
-          } else {
-            priceEl.textContent = `$${selectedVariant.price}`;
-          }
-
-          if (selectedVariant.sku) {
-            skuEl.textContent = `SKU: ${selectedVariant.sku}`;
-            skuEl.style.display = 'block';
-          }
-
-          addToCartBtn.disabled = false;
-
-          // Dynamic button text based on recommendations
-          if (selectedRecommendations.size > 0) {
-            addToCartBtn.textContent = 'Add Bundle to Cart';
-          } else {
-            addToCartBtn.textContent = 'Add to Cart';
-          }
+              <div style="font-size: 12px; color: #666;">
+                Main: $${selectedVariant.price} + ${selectedRecommendations.size} item${selectedRecommendations.size > 1 ? 's' : ''}: $${recommendationsPriceTotal.toFixed(2)}
+              </div>
+            </div>
+          `;
         } else {
-          if (allSelected) {
-            addToCartBtn.textContent = 'Variant Not Available';
-          } else {
-            addToCartBtn.textContent = 'Select All Options';
-          }
-          addToCartBtn.disabled = true;
+          priceEl.innerHTML = `<strong>Price:</strong> $${selectedVariant.price}`;
         }
+
+        if (selectedVariant.sku) {
+          skuEl.innerHTML = `<strong>SKU:</strong> ${selectedVariant.sku}`;
+          skuEl.style.display = 'block';
+        }
+
+        // Enable buy now button with dynamic text
+        buyNowBtn.disabled = false;
+
+        if (selectedRecommendations.size > 0) {
+          buyNowBtn.textContent = 'Buy Bundle Now';
+        } else {
+          buyNowBtn.textContent = 'Buy Now';
+        }
+
+        // Also enable add to cart if visible
+        if (addToCartBtn) {
+          addToCartBtn.disabled = false;
+          addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
+        }
+      } else {
+        variantInfo.style.display = 'none';
+        buyNowBtn.disabled = true;
+        buyNowBtn.textContent = 'Variant Not Available';
+        if (addToCartBtn) {
+          addToCartBtn.disabled = true;
+          addToCartBtn.textContent = 'Variant Not Available';
+        }
+      }
+    } else {
+      variantInfo.style.display = 'none';
+      buyNowBtn.disabled = true;
+      buyNowBtn.textContent = 'Select All Options';
+      if (addToCartBtn) {
+        addToCartBtn.disabled = true;
+        addToCartBtn.textContent = 'Select All Options';
+      }
+    }
+  }
+
+  // Get main product selections for smart pre-fill
+  function getMainProductSelections() {
+    const selections = {};
+
+    attributes.forEach(attr => {
+      const valueId = selectedOptions[attr.id];
+      if (valueId) {
+        const value = attr.values.find(v => v.id === valueId);
+        if (value) {
+          selections[attr.id] = {
+            valueId: valueId,
+            attrName: attr.name,
+            valueText: value.value
+          };
+        }
+      }
+    });
+
+    return selections;
+  }
+
+  // Find matching or nearest attribute value
+  function findMatchingValue(mainSelection, availableValues) {
+    if (!mainSelection || !availableValues || availableValues.length === 0) {
+      return null;
+    }
+
+    // First try: Exact match by value text (case-insensitive)
+    const exactMatch = availableValues.find(v =>
+      v.value.toLowerCase() === mainSelection.valueText.toLowerCase()
+    );
+    if (exactMatch) return exactMatch.id;
+
+    // Second try: Partial match (contains)
+    const partialMatch = availableValues.find(v =>
+      v.value.toLowerCase().includes(mainSelection.valueText.toLowerCase()) ||
+      mainSelection.valueText.toLowerCase().includes(v.value.toLowerCase())
+    );
+    if (partialMatch) return partialMatch.id;
+
+    // Third try: For numeric values, find nearest (e.g., carat weight)
+    const mainValue = parseFloat(mainSelection.valueText);
+    if (!isNaN(mainValue)) {
+      const numericValues = availableValues
+        .map(v => ({ ...v, numeric: parseFloat(v.value) }))
+        .filter(v => !isNaN(v.numeric));
+
+      if (numericValues.length > 0) {
+        const nearest = numericValues.reduce((prev, curr) =>
+          Math.abs(curr.numeric - mainValue) < Math.abs(prev.numeric - mainValue) ? curr : prev
+        );
+        return nearest.id;
       }
     }
 
-    // Function to hide Shopify default prices
-    function hideShopifyPrices() {
-      const priceSelectors = [
-        '.product__price:not(.unlimited-price)',
-        '.price:not(.unlimited-price)',
-        '.product-price:not(.unlimited-price)',
-        '[data-product-price]:not(.unlimited-price)',
-        '.price__container:not(.unlimited-price-section)',
-        '.price-item:not(.unlimited-price)',
-        '.product__price-wrapper:not(.unlimited-price-section)',
-        '.product-single__price:not(.unlimited-price)',
-        '.product__pricing:not(.unlimited-price-section)',
-        '.product-form__price:not(.unlimited-price)',
-        '[class*="ProductPrice"]:not(.unlimited-price)',
-        '[data-price]:not(.unlimited-price)',
-        '.money:not(.unlimited-price)'
-      ];
+    // No match found - return default or first
+    const defaultValue = availableValues.find(v => v.is_default);
+    return defaultValue?.id || null;
+  }
 
-      priceSelectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(el => {
-          // Check if it's not our custom price
-          if (!el.classList.contains('unlimited-price') &&
-              !el.classList.contains('unlimited-price-section') &&
-              !el.closest('.unlimited-price-section')) {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
+  // Extract attributes from variants
+  function extractAttributes(variants) {
+    const uniqueAttrs = {};
+
+    variants.forEach(variant => {
+      variant.variant_options?.forEach(opt => {
+        if (opt.attribute) {
+          if (!uniqueAttrs[opt.attribute.id]) {
+            uniqueAttrs[opt.attribute.id] = {
+              ...opt.attribute,
+              values: []
+            };
           }
-        });
+          if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
+            uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
+          }
+        }
       });
-    }
+    });
 
-    // Hide prices on load and periodically
-    hideShopifyPrices();
-    setInterval(hideShopifyPrices, 500);
+    return Object.values(uniqueAttrs);
+  }
 
-    // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', loadCustomizer);
-    } else {
-      loadCustomizer();
+  async function addToCart() {
+    if (!selectedVariant) return;
+
+    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
+    addToCartBtn.disabled = true;
+    addToCartBtn.textContent = 'Adding...';
+
+    try {
+      const itemsToAdd = [];
+
+      console.log('[Bundle Add] Starting bundle add to cart', {
+        mainVariant: selectedVariant.id,
+        selectedRecommendations: Array.from(selectedRecommendations)
+      });
+
+      // Add main product via API first
+      const apiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variantId: selectedVariant.id,
+          quantity: 1
+        })
+      });
+
+      if (!apiResponse.ok) {
+        const error = await apiResponse.json();
+        throw new Error(error.error || 'Failed to prepare cart');
+      }
+
+      const apiData = await apiResponse.json();
+      console.log('[Bundle Add] Main product API response:', apiData);
+
+      // Handle fallback mode for custom variants
+      if (apiData.fallback && apiData.variant) {
+        const productVariantId = {{ product.variants.first.id }};
+        console.log('[Bundle Add] Using fallback mode for main product');
+        console.log('[Bundle Add] Shopify variant ID:', productVariantId);
+        console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id from API:', apiData.variant.properties?._custom_variant_id);
+
+        // Use properties from API response
+        const properties = apiData.variant.properties || {
+          '_Custom_Variant': 'Yes',
+          '_Price': `$${apiData.variant.price}`
+        };
+
+        console.log('[Bundle Add] DEBUG: properties object to use:', properties);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id in properties:', properties._custom_variant_id);
+
+        itemsToAdd.push({
+          id: productVariantId,
+          quantity: 1,
+          properties: properties
+        });
+
+        console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id in cart item:', itemsToAdd[itemsToAdd.length - 1].properties._custom_variant_id);
+      } else if (apiData.success && apiData.shopifyVariantId) {
+        // Direct Shopify variant (if synced)
+        itemsToAdd.push({
+          id: apiData.shopifyVariantId,
+          quantity: 1
+        });
+      } else {
+        console.error('[Bundle Add] Unexpected API response format:', apiData);
+        throw new Error('Invalid API response format');
+      }
+
+      // Handle recommendations with smart pre-fill if any selected
+      if (selectedRecommendations.size > 0) {
+        const mainSelections = getMainProductSelections();
+        console.log('[Bundle Add] Main selections:', mainSelections);
+
+        const recommendationErrors = [];
+
+        for (const productId of selectedRecommendations) {
+          console.log('[Bundle Add] Processing recommendation:', productId);
+
+          const cachedData = recommendationVariantsCache[productId];
+          const recVariants = cachedData?.variants || [];
+
+          console.log('[Bundle Add] Recommendation variants:', {
+            productId,
+            variantCount: recVariants.length,
+            variants: recVariants
+          });
+
+          if (recVariants.length === 0) {
+            recommendationErrors.push(`Product ${productId} has no variants`);
+            continue;
+          }
+
+          // Extract attributes for this recommendation
+          const recAttributes = extractAttributes(recVariants);
+
+          // Build pre-filled selections
+          const preFilledSelections = {};
+
+          recAttributes.forEach(attr => {
+            // Try to match with main product selections
+            const matchingMainSelection = Object.values(mainSelections).find(sel =>
+              sel.attrName && attr.name &&
+              sel.attrName.toLowerCase() === attr.name.toLowerCase()
+            );
+
+            if (matchingMainSelection) {
+              const matchedValueId = findMatchingValue(
+                { valueText: matchingMainSelection.valueText },
+                attr.values
+              );
+
+              if (matchedValueId) {
+                preFilledSelections[attr.id] = matchedValueId;
+              }
+            } else {
+              // No match, use default or first
+              const defaultValue = attr.values.find(v => v.is_default);
+              if (defaultValue) {
+                preFilledSelections[attr.id] = defaultValue.id;
+              }
+            }
+          });
+
+          console.log('[Bundle Add] Pre-filled selections:', preFilledSelections);
+
+          // Find matching variant from pre-filled selections
+          const matchedVariant = recVariants.find(variant => {
+            return variant.variant_options?.every(opt =>
+              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+            );
+          });
+
+          console.log('[Bundle Add] Matched variant:', matchedVariant);
+
+          if (matchedVariant) {
+            // Add recommendation via API
+            try {
+              const recApiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  variantId: matchedVariant.id,
+                  quantity: 1
+                })
+              });
+
+              if (recApiResponse.ok) {
+                const recApiData = await recApiResponse.json();
+                console.log('[Bundle Add] Recommendation API response:', recApiData);
+
+                if (recApiData.fallback && recApiData.variant) {
+                  // Fallback mode: use Shopify product's first variant with properties
+                  const shopifyFallbackVariantId = cachedData?.shopifyFallbackVariantId;
+
+                  if (shopifyFallbackVariantId) {
+                    itemsToAdd.push({
+                      id: shopifyFallbackVariantId,
+                      quantity: 1,
+                      properties: recApiData.variant.properties || {}
+                    });
+                    console.log('[Bundle Add] Added recommendation (fallback):', shopifyFallbackVariantId);
+                  } else {
+                    recommendationErrors.push(`No fallback variant for product ${productId}`);
+                  }
+                } else if (recApiData.success && recApiData.shopifyVariantId) {
+                  // Direct Shopify variant
+                  itemsToAdd.push({
+                    id: recApiData.shopifyVariantId,
+                    quantity: 1
+                  });
+                  console.log('[Bundle Add] Added recommendation (direct):', recApiData.shopifyVariantId);
+                }
+              } else {
+                recommendationErrors.push(`API error for product ${productId}`);
+              }
+            } catch (err) {
+              console.error('[Bundle Add] Error adding recommendation:', err);
+              recommendationErrors.push(`Error adding product ${productId}: ${err.message}`);
+            }
+          } else {
+            recommendationErrors.push(`No matching variant found for product ${productId}`);
+          }
+        }
+
+        if (recommendationErrors.length > 0) {
+          console.warn('[Bundle Add] Some recommendations failed:', recommendationErrors);
+        }
+      }
+
+      console.log('[Bundle Add] Final items to add:', itemsToAdd);
+      console.log('[Bundle Add] Number of items to add:', itemsToAdd.length);
+
+      // Validate all items have valid IDs
+      const invalidItems = itemsToAdd.filter(item => !item.id || item.id === '0' || item.id === 0);
+      if (invalidItems.length > 0) {
+        console.error('[Bundle Add] Invalid items detected:', invalidItems);
+        throw new Error(`${invalidItems.length} items have invalid variant IDs`);
+      }
+
+      // Add all items to cart
+      console.log('[Bundle Add] Sending request to /cart/add.js...');
+      const response = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: itemsToAdd })
+      });
+
+      console.log('[Bundle Add] Cart response status:', response.status);
+      console.log('[Bundle Add] Cart response ok:', response.ok);
+
+      const cartResponseText = await response.text();
+      console.log('[Bundle Add] Raw cart response:', cartResponseText);
+
+      let cartData;
+      try {
+        cartData = JSON.parse(cartResponseText);
+      } catch (e) {
+        console.error('[Bundle Add] Failed to parse cart response:', e);
+        throw new Error('Invalid cart response format');
+      }
+
+      if (!response.ok) {
+        console.error('[Bundle Add] Cart add error:', cartData);
+        console.error('[Bundle Add] Error description:', cartData.description);
+        console.error('[Bundle Add] Error message:', cartData.message);
+        throw new Error(cartData.description || cartData.message || 'Failed to add to cart');
+      }
+
+      console.log('[Bundle Add] Cart add success:', cartData);
+      console.log('[Bundle Add] Items actually added:', cartData.items?.length || 'unknown');
+
+      // Success!
+      addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
+
+      // Clear recommendation selections
+      selectedRecommendations.clear();
+      const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+      checkboxes.forEach(cb => cb.checked = false);
+
+      // Hide bundle preview
+      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+      if (bundlePreview) {
+        bundlePreview.style.display = 'none';
+      }
+
+      // Trigger multiple cart update events to ensure refresh
+      document.dispatchEvent(new CustomEvent('cart:updated'));
+      document.dispatchEvent(new CustomEvent('cart:refresh'));
+
+      // Trigger Shopify theme cart updates
+      if (typeof window.Shopify !== 'undefined') {
+        if (window.Shopify.onCartUpdate) {
+          window.Shopify.onCartUpdate();
+        }
+      }
+
+      // Try to refresh cart drawer/section if available
+      fetch('/cart.js')
+        .then(r => r.json())
+        .then(cart => {
+          document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
+          console.log('[Bundle Add] Cart refreshed:', cart);
+        })
+        .catch(e => console.error('[Bundle Add] Cart refresh error:', e));
+
+      // Reset after 2 seconds
+      setTimeout(() => {
+        addToCartBtn.textContent = 'Add to Cart';
+        addToCartBtn.disabled = false;
+      }, 2000);
+    } catch (error) {
+      console.error('[Bundle Add] Error adding to cart:', error);
+      addToCartBtn.textContent = 'Error - Try Again';
+
+      alert(`Failed to add to cart: ${error.message}\n\nCheck console for details.`);
+
+      setTimeout(() => {
+        const hasRecommendations = selectedRecommendations.size > 0;
+        addToCartBtn.textContent = hasRecommendations ? 'Add Bundle to Cart' : 'Add to Cart';
+        addToCartBtn.disabled = false;
+      }, 2000);
     }
-  })();
+  }
+
+  async function buyNow() {
+    if (!selectedVariant) return;
+
+    const buyNowBtn = container.querySelector('.unlimited-buy-now');
+    buyNowBtn.disabled = true;
+    buyNowBtn.textContent = 'Creating checkout...';
+
+    try {
+      const itemsToProcess = [];
+
+      console.log('[Buy Now] Starting checkout creation', {
+        mainVariant: selectedVariant.id,
+        selectedRecommendations: Array.from(selectedRecommendations)
+      });
+
+      // Add main product
+      itemsToProcess.push({
+        variantId: selectedVariant.id,
+        quantity: 1
+      });
+
+      // Handle recommendations with smart pre-fill if any selected
+      if (selectedRecommendations.size > 0) {
+        const mainSelections = getMainProductSelections();
+        console.log('[Buy Now] Main selections:', mainSelections);
+
+        for (const productId of selectedRecommendations) {
+          console.log('[Buy Now] Processing recommendation:', productId);
+
+          const cachedData = recommendationVariantsCache[productId];
+          const recVariants = cachedData?.variants || [];
+
+          if (recVariants.length === 0) {
+            console.warn('[Buy Now] Skipping recommendation - no variants:', productId);
+            continue;
+          }
+
+          // Extract attributes for this recommendation
+          const recAttributes = extractAttributes(recVariants);
+
+          // Build pre-filled selections
+          const preFilledSelections = {};
+
+          recAttributes.forEach(attr => {
+            // Try to match with main product selections
+            const matchingMainSelection = Object.values(mainSelections).find(sel =>
+              sel.attrName && attr.name &&
+              sel.attrName.toLowerCase() === attr.name.toLowerCase()
+            );
+
+            if (matchingMainSelection) {
+              const matchedValueId = findMatchingValue(
+                { valueText: matchingMainSelection.valueText },
+                attr.values
+              );
+
+              if (matchedValueId) {
+                preFilledSelections[attr.id] = matchedValueId;
+              }
+            } else {
+              // No match, use default or first
+              const defaultValue = attr.values.find(v => v.is_default);
+              if (defaultValue) {
+                preFilledSelections[attr.id] = defaultValue.id;
+              }
+            }
+          });
+
+          // Find matching variant from pre-filled selections
+          const matchedVariant = recVariants.find(variant => {
+            return variant.variant_options?.every(opt =>
+              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+            );
+          });
+
+          if (matchedVariant) {
+            itemsToProcess.push({
+              variantId: matchedVariant.id,
+              quantity: 1
+            });
+            console.log('[Buy Now] Added recommendation:', matchedVariant.id);
+          } else {
+            console.warn('[Buy Now] No matching variant for recommendation:', productId);
+          }
+        }
+      }
+
+      console.log('[Buy Now] Creating checkout with items:', itemsToProcess);
+
+      // Call create-checkout API
+      const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: itemsToProcess })
+      });
+
+      console.log('[Buy Now] Checkout response status:', response.status);
+
+      const data = await response.json();
+      console.log('[Buy Now] Checkout response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to create checkout');
+      }
+
+      if (!data.success || !data.checkoutUrl) {
+        throw new Error('No checkout URL returned');
+      }
+
+      console.log('[Buy Now] Redirecting to checkout:', data.checkoutUrl);
+
+      // Clear recommendation selections
+      selectedRecommendations.clear();
+      const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+      checkboxes.forEach(cb => cb.checked = false);
+
+      // Hide bundle preview
+      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+      if (bundlePreview) {
+        bundlePreview.style.display = 'none';
+      }
+
+      // Redirect to checkout
+      window.location.href = data.checkoutUrl;
+
+    } catch (error) {
+      console.error('[Buy Now] Error creating checkout:', error);
+      buyNowBtn.textContent = 'Error - Try Again';
+
+      alert(`Failed to create checkout: ${error.message}\n\nCheck console for details.`);
+
+      setTimeout(() => {
+        const hasRecommendations = selectedRecommendations.size > 0;
+        buyNowBtn.textContent = hasRecommendations ? 'Buy Bundle Now' : 'Buy Now';
+        buyNowBtn.disabled = false;
+      }, 2000);
+    }
+  }
+
+  // Initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadCustomizer);
+  } else {
+    loadCustomizer();
+  }
+})();
 </script>
 
 <style>
-  .unlimited-options-widget {
-    max-width: 100%;
-    margin: 20px 0;
-  }
+.unlimited-customizer {
+  margin: 30px 0;
+  padding: 20px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+}
 
-  .unlimited-options-content {
-    padding: 0;
-  }
+.unlimited-customizer__loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
 
-  .unlimited-option-group {
-    margin-bottom: 20px;
-  }
+.unlimited-customizer__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+}
 
-  .unlimited-option-label {
-    display: block;
-    font-weight: 600;
-    color: #202223;
-    margin-bottom: 8px;
-    font-size: 14px;
-  }
+.unlimited-customizer__options {
+  margin-bottom: 20px;
+}
 
-  .unlimited-dropdown {
-    width: 100%;
-    padding: 10px 14px;
-    border: 2px solid #c9cccf;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #202223;
-    background: white;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
+.unlimited-option {
+  margin-bottom: 20px;
+}
 
-  .unlimited-dropdown:hover {
-    border-color: #008060;
-  }
+.unlimited-option__label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #333;
+}
 
-  .unlimited-dropdown:focus {
-    outline: none;
-    border-color: #008060;
-    box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
-  }
+.unlimited-option__select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
 
-  .unlimited-image-preview {
-    margin-top: 10px;
-    padding: 10px;
-    background: #f6f6f7;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+.unlimited-option__select:focus {
+  outline: none;
+  border-color: #008060;
+}
 
-  .unlimited-preview-img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 4px;
-    border: 2px solid #e3e5e7;
-  }
+.unlimited-option__preview {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  text-align: center;
+}
 
-  .unlimited-price-section {
-    margin: 20px 0;
-    padding: 16px;
-    background: #f6f6f7;
-    border-radius: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
+.unlimited-option__image {
+  max-width: 80px;
+  height: auto;
+  border-radius: 4px;
+}
 
-  .unlimited-price {
-    font-size: 24px;
-    font-weight: 700;
-    color: #008060;
-  }
+.unlimited-customizer__variant-info {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
 
-  .unlimited-add-to-cart {
-    width: 100%;
-    padding: 14px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 600;
-    background: #008060;
-    color: white;
-    transition: background 0.2s;
-    margin-top: 8px;
-  }
+.unlimited-variant-price {
+  font-size: 24px;
+  color: #008060;
+  margin-bottom: 8px;
+}
 
-  .unlimited-add-to-cart:hover:not(:disabled) {
-    background: #006e52;
-  }
+.unlimited-variant-sku {
+  font-size: 12px;
+  color: #999;
+}
 
-  .unlimited-add-to-cart:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: #6d7175;
-  }
+.unlimited-customizer__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 
-  .unlimited-sku {
-    margin-top: 12px;
-    font-size: 12px;
-    color: #6d7175;
-    text-align: center;
-  }
+.unlimited-buy-now {
+  flex: 1;
+  min-width: 200px;
+  padding: 16px 32px;
+  font-size: 18px;
+  font-weight: 700;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #008060;
+  color: white;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 128, 96, 0.3);
+}
 
-  /* Recommendations Styles */
-  .unlimited-recommendations {
-    margin: 24px 0;
-    padding: 20px;
-    background: #f9f9f9;
-    border-radius: 8px;
-  }
+.unlimited-buy-now:hover:not(:disabled) {
+  background: #006e52;
+  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.4);
+  transform: translateY(-1px);
+}
 
-  .unlimited-recommendations__title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 16px;
-    color: #333;
-  }
+.unlimited-buy-now:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #999;
+  box-shadow: none;
+  transform: none;
+}
 
+.unlimited-add-to-cart {
+  flex: 0 0 auto;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #008060;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  color: #008060;
+  transition: all 0.2s;
+}
+
+.unlimited-add-to-cart:hover:not(:disabled) {
+  background: #f0f7f5;
+  border-color: #006e52;
+  color: #006e52;
+}
+
+.unlimited-add-to-cart:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: #999;
+  color: #999;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #008060;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Recommendations Styles */
+.unlimited-recommendations {
+  margin: 24px 0;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.unlimited-recommendations__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.unlimited-recommendations__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.unlimited-recommendation-item {
+  position: relative;
+  flex: 0 0 150px;
+}
+
+.unlimited-recommendation-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  z-index: 10;
+  accent-color: #008060;
+}
+
+.unlimited-recommendation-label {
+  display: block;
+  cursor: pointer;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+  background: white;
+}
+
+.unlimited-recommendation-label:hover {
+  border-color: #008060;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.unlimited-recommendation-item input:checked + .unlimited-recommendation-label {
+  border-color: #008060;
+  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.3);
+}
+
+.unlimited-recommendation-image {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.unlimited-recommendation-placeholder {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #999;
+  font-size: 12px;
+}
+
+.unlimited-recommendation-info {
+  padding: 8px;
+  background: white;
+}
+
+.unlimited-recommendation-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.unlimited-recommendation-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #008060;
+  margin-top: 4px;
+}
+
+/* Bundle Preview Styles */
+.unlimited-bundle-preview {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f0f7f4;
+  border: 2px solid #008060;
+  border-radius: 8px;
+  display: none;
+}
+
+.unlimited-bundle-preview__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #006e52;
+  margin-bottom: 12px;
+}
+
+.unlimited-bundle-preview__items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unlimited-bundle-preview__item {
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border-left: 3px solid #ddd;
+}
+
+.unlimited-bundle-preview__item--main {
+  border-left-color: #008060;
+}
+
+.unlimited-bundle-preview__item--success {
+  border-left-color: #28a745;
+}
+
+.unlimited-bundle-preview__item--error {
+  border-left-color: #dc3545;
+  background: #fff5f5;
+}
+
+.unlimited-bundle-preview__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.unlimited-bundle-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+}
+
+.unlimited-match-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #28a745;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.unlimited-match-badge--nearest {
+  background: #ffc107;
+  color: #333;
+}
+
+.unlimited-match-badge--default {
+  background: #6c757d;
+  color: white;
+  width: auto;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 9px;
+}
+
+.unlimited-error {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.unlimited-bundle-preview__note {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #dee2e6;
+  color: #6c757d;
+  font-size: 11px;
+}
+
+@media (max-width: 768px) {
   .unlimited-recommendations__grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .unlimited-recommendation-item {
-    position: relative;
-    flex: 0 0 150px;
-  }
-
-  .unlimited-recommendation-checkbox {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    z-index: 10;
-    accent-color: #008060;
-  }
-
-  .unlimited-recommendation-label {
-    display: block;
-    cursor: pointer;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    overflow: hidden;
-    transition: all 0.2s;
-    background: white;
-  }
-
-  .unlimited-recommendation-label:hover {
-    border-color: #008060;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  .unlimited-recommendation-item input:checked + .unlimited-recommendation-label {
-    border-color: #008060;
-    box-shadow: 0 4px 12px rgba(0, 128, 96, 0.3);
-  }
-
-  .unlimited-recommendation-image {
-    width: 150px;
-    height: 150px;
-    object-fit: cover;
-    display: block;
-  }
-
-  .unlimited-recommendation-placeholder {
-    width: 150px;
-    height: 150px;
-    display: flex;
-    align-items: center;
     justify-content: center;
-    background: #f0f0f0;
-    color: #999;
-    font-size: 12px;
-  }
-
-  .unlimited-recommendation-info {
-    padding: 8px;
-    background: white;
-  }
-
-  .unlimited-recommendation-name {
-    font-size: 12px;
-    font-weight: 500;
-    color: #333;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  .unlimited-recommendation-price {
-    font-size: 13px;
-    font-weight: 600;
-    color: #008060;
-    margin-top: 4px;
-  }
-
-  /* Bundle Preview Styles */
-  .unlimited-bundle-preview {
-    margin: 20px 0;
-    padding: 16px;
-    background: #f0f7f4;
-    border: 2px solid #008060;
-    border-radius: 8px;
-    display: none;
-  }
-
-  .unlimited-bundle-preview__title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #006e52;
-    margin-bottom: 12px;
-  }
-
-  .unlimited-bundle-preview__items {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .unlimited-bundle-preview__item {
-    padding: 10px;
-    background: white;
-    border-radius: 6px;
-    border-left: 3px solid #ddd;
-  }
-
-  .unlimited-bundle-preview__item--main {
-    border-left-color: #008060;
-  }
-
-  .unlimited-bundle-preview__item--success {
-    border-left-color: #28a745;
-  }
-
-  .unlimited-bundle-preview__item--error {
-    border-left-color: #dc3545;
-    background: #fff5f5;
   }
 
   .unlimited-bundle-preview__options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 6px;
+    flex-direction: column;
   }
-
-  .unlimited-bundle-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #495057;
-  }
-
-  .unlimited-match-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #28a745;
-    color: white;
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  .unlimited-match-badge--nearest {
-    background: #ffc107;
-    color: #333;
-  }
-
-  .unlimited-match-badge--default {
-    background: #6c757d;
-    color: white;
-    width: auto;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 9px;
-  }
-
-  .unlimited-error {
-    color: #dc3545;
-    font-weight: 500;
-  }
-
-  .unlimited-bundle-preview__note {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #dee2e6;
-    color: #6c757d;
-    font-size: 11px;
-  }
-
-  @media (max-width: 768px) {
-    .unlimited-recommendations__grid {
-      justify-content: center;
-    }
-
-    .unlimited-bundle-preview__options {
-      flex-direction: column;
-    }
-  }
-</style>
-
-{% schema %}
-{
-  "name": "Product Customizer",
-  "target": "section",
-  "settings": [
-    {
-      "type": "checkbox",
-      "id": "show_sku",
-      "label": "Show SKU",
-      "default": true
-    }
-  ]
 }
-{% endschema %}
+</style>

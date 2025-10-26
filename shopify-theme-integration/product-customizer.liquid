@@ -686,12 +686,16 @@
         console.log('[Bundle Add] Using fallback mode for main product');
         console.log('[Bundle Add] Shopify variant ID:', productVariantId);
         console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id from API:', apiData.variant.properties?._custom_variant_id);
 
         // Use properties from API response
         const properties = apiData.variant.properties || {
           '_Custom_Variant': 'Yes',
           '_Price': `$${apiData.variant.price}`
         };
+
+        console.log('[Bundle Add] DEBUG: properties object to use:', properties);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id in properties:', properties._custom_variant_id);
 
         itemsToAdd.push({
           id: productVariantId,
@@ -700,6 +704,7 @@
         });
 
         console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
+        console.log('[Bundle Add] DEBUG: _custom_variant_id in cart item:', itemsToAdd[itemsToAdd.length - 1].properties._custom_variant_id);
       } else if (apiData.success && apiData.shopifyVariantId) {
         // Direct Shopify variant (if synced)
         itemsToAdd.push({

@@ -109,6 +109,9 @@ async function addVariantHandler(req, res) {
       '_custom_variant_id': variant.id // Store variant ID for checkout
     };
 
+    console.log('[add-variant] DEBUG: variant.id =', variant.id);
+    console.log('[add-variant] DEBUG: properties after initial build =', JSON.stringify(properties));
+
     variant.variant_options?.forEach(opt => {
       if (opt.attribute && opt.attribute_value) {
         properties[opt.attribute.name] = opt.attribute_value.value;
@@ -140,6 +143,7 @@ async function addVariantHandler(req, res) {
       message: 'Using fallback mode with line item properties'
     };
 
+    console.log('[add-variant] DEBUG: Final properties being sent =', JSON.stringify(response.variant.properties));
     console.log('[add-variant] Success response:', response);
     res.status(200).json(response);
   } catch (error) {
