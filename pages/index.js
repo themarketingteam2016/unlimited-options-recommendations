@@ -22,12 +22,18 @@ export default function Home() {
     // Check if we're in an iframe (embedded app)
     setIsEmbedded(window.top !== window.self);
 
-    // Get shop from URL params
-    const shopParam = router.query.shop;
-    if (shopParam) {
-      setShop(shopParam);
+    // Wait for router to be ready before reading query params
+    if (router.isReady) {
+      const shopParam = router.query.shop;
+      console.log('[Home] Router ready, shop param:', shopParam);
+      if (shopParam) {
+        setShop(shopParam);
+      } else {
+        // For custom apps accessed via /auth, shop should always be in URL
+        console.warn('[Home] No shop parameter found in URL');
+      }
     }
-  }, [router.query]);
+  }, [router.isReady, router.query]);
 
   useEffect(() => {
     if (shop) {
@@ -188,10 +194,21 @@ export default function Home() {
 
   // For custom apps, shop parameter comes from query string
   if (!shop) {
+    // Show different message based on router state
+    if (!router.isReady) {
+      return (
+        <div className={styles.loading}>
+          <p>Initializing app...</p>
+        </div>
+      );
+    }
+
+    // Router is ready but no shop param
     return (
       <div className={styles.loading}>
-        <p>Loading...</p>
-        <p>If this persists, please ensure the app is accessed through Shopify Admin.</p>
+        <p>Missing shop parameter.</p>
+        <p>Current URL: {typeof window !== 'undefined' ? window.location.href : 'N/A'}</p>
+        <p>Please access this app through your Shopify Admin → Apps menu.</p>
       </div>
     );
   }
