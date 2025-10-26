@@ -63,6 +63,15 @@
 
       attributes = Object.values(uniqueAttrs);
 
+      // Debug: Log attributes to verify is_default flag
+      console.log('[Customizer] Loaded attributes:', attributes);
+      attributes.forEach(attr => {
+        console.log(`[Customizer] ${attr.name} values:`, attr.values.map(v => ({
+          value: v.value,
+          is_default: v.is_default
+        })));
+      });
+
       // Load recommendations
       await loadRecommendations();
 
@@ -509,17 +518,32 @@
 
   function initializeDefaultSelections() {
     console.log('[Customizer] Initializing default selections');
+    console.log('[Customizer] Attributes available:', attributes.length);
+
+    if (!attributes || attributes.length === 0) {
+      console.error('[Customizer] No attributes to initialize defaults from!');
+      return;
+    }
+
+    let defaultsFound = 0;
 
     // Auto-select default values
     attributes.forEach(attr => {
-      const defaultValue = attr.values.find(v => v.is_default);
+      console.log(`[Customizer] Processing attribute: ${attr.name}, values:`, attr.values.length);
+
+      const defaultValue = attr.values.find(v => v.is_default === true);
+
       if (defaultValue) {
         selectedOptions[attr.id] = defaultValue.id;
-        console.log(`[Customizer] Auto-selected default for ${attr.name}: ${defaultValue.value}`);
+        defaultsFound++;
+        console.log(`[Customizer] ✓ Auto-selected default for ${attr.name}: ${defaultValue.value} (id: ${defaultValue.id})`);
 
         // Show image preview for default selection
         const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
         if (select) {
+          // Also set the select element's value
+          select.value = defaultValue.id;
+
           const preview = select.closest('.unlimited-option').querySelector('.unlimited-option__preview');
           const previewImg = preview?.querySelector('.unlimited-option__image');
 
@@ -529,8 +553,26 @@
             preview.style.display = 'block';
           }
         }
+      } else {
+        console.warn(`[Customizer] ⚠️ No default value found for ${attr.name}`);
+        console.warn(`[Customizer] Available values:`, attr.values.map(v => `${v.value} (is_default: ${v.is_default})`));
+
+        // Fallback: select first value if no default
+        if (attr.values.length > 0) {
+          const firstValue = attr.values[0];
+          selectedOptions[attr.id] = firstValue.id;
+          console.log(`[Customizer] Fallback: Selected first value for ${attr.name}: ${firstValue.value}`);
+
+          const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
+          if (select) {
+            select.value = firstValue.id;
+          }
+        }
       }
     });
+
+    console.log(`[Customizer] Initialized ${defaultsFound} default selections out of ${attributes.length} attributes`);
+    console.log('[Customizer] Selected options:', selectedOptions);
 
     // Update variant info to show price and details
     updateVariant();
