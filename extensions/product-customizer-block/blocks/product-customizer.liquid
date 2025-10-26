@@ -1082,6 +1082,120 @@
     loadCustomizer();
   }
 })();
+
+// Cart Checkout Interception for Custom Variants
+(function() {
+  console.log('[Cart Checkout] Initializing checkout interception');
+
+  async function interceptCheckout(event) {
+    try {
+      // Get current cart
+      const cartResponse = await fetch('/cart.js');
+      const cart = await cartResponse.json();
+
+      console.log('[Cart Checkout] Current cart:', cart);
+
+      // Check if cart has custom variants (items with _custom_variant_id property)
+      const customItems = cart.items.filter(item =>
+        item.properties && item.properties._custom_variant_id
+      );
+
+      if (customItems.length === 0) {
+        console.log('[Cart Checkout] No custom variants in cart, allowing normal checkout');
+        return; // Allow normal checkout
+      }
+
+      // Prevent default checkout
+      event.preventDefault();
+      event.stopPropagation();
+
+      console.log('[Cart Checkout] Found custom variants, intercepting checkout:', customItems);
+
+      // Show loading state
+      const button = event.target.closest('button, a, [type="submit"]');
+      const originalText = button ? button.textContent : '';
+      if (button) {
+        button.textContent = 'Creating checkout...';
+        button.disabled = true;
+      }
+
+      // Prepare items for create-checkout API
+      const items = customItems.map(item => ({
+        variantId: item.properties._custom_variant_id,
+        quantity: item.quantity
+      }));
+
+      console.log('[Cart Checkout] Creating Draft Order with items:', items);
+
+      // Call create-checkout API
+      const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items })
+      });
+
+      const data = await response.json();
+      console.log('[Cart Checkout] API response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to create checkout');
+      }
+
+      if (!data.checkoutUrl) {
+        throw new Error('No checkout URL returned');
+      }
+
+      // Redirect to Draft Order checkout
+      console.log('[Cart Checkout] Redirecting to:', data.checkoutUrl);
+      window.location.href = data.checkoutUrl;
+
+    } catch (error) {
+      console.error('[Cart Checkout] Error:', error);
+      alert(`Failed to create checkout: ${error.message}\n\nPlease try again or contact support.`);
+
+      // Restore button state
+      if (button) {
+        button.textContent = originalText;
+        button.disabled = false;
+      }
+    }
+  }
+
+  function setupCheckoutInterception() {
+    // Find all checkout buttons
+    const checkoutButtons = document.querySelectorAll(
+      'button[name="checkout"], ' +
+      'input[name="checkout"], ' +
+      '[href="/checkout"], ' +
+      '[href*="/checkouts/"], ' +
+      '.cart__checkout-button, ' +
+      '.cart-drawer__checkout, ' +
+      'button.checkout'
+    );
+
+    console.log('[Cart Checkout] Found checkout buttons:', checkoutButtons.length);
+
+    checkoutButtons.forEach(button => {
+      button.addEventListener('click', interceptCheckout, true); // Use capture phase
+      console.log('[Cart Checkout] Attached listener to button:', button);
+    });
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupCheckoutInterception);
+  } else {
+    setupCheckoutInterception();
+  }
+
+  // Also run when cart updates (for cart drawer themes)
+  document.addEventListener('cart:updated', setupCheckoutInterception);
+
+  // Run periodically to catch dynamically added buttons
+  setInterval(setupCheckoutInterception, 2000);
+})();
 </script>
 
 <style>
@@ -1456,21 +1570,3 @@
   }
 }
 </style>
-
-{% schema %}
-{
-  "name": "Product Options Customize",
-  "target": "section",
-  "enabled_on": {
-    "templates": ["product"]
-  },
-  "settings": [
-    {
-      "type": "text",
-      "id": "heading",
-      "label": "Heading",
-      "default": "Customize Your Product"
-    }
-  ]
-}
-{% endschema %}
