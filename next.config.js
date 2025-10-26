@@ -15,6 +15,20 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: undefined,
   },
+  // Headers for embedded app in Shopify
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors https://*.myshopify.com https://admin.shopify.com",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

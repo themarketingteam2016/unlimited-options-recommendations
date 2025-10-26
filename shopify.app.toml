@@ -2,7 +2,7 @@
 
 client_id = "ff7cd44448a97a45216a6a04d47281b0"
 name = "unlimited-options"
-application_url = "https://unlimtited-options-recommendations.vercel.app"
+application_url = "https://unlimtited-options-recommendations.vercel.app/auth"
 embedded = true
 
 [build]
@@ -22,8 +22,7 @@ scopes = "read_products,write_products,read_inventory,write_inventory,read_order
 
 [auth]
 redirect_urls = [
-  "https://unlimtited-options-recommendations.vercel.app/api/auth/callback",
-  "https://example.com/api/auth/callback"
+  "https://unlimtited-options-recommendations.vercel.app/auth"
 ]
 
 extension_directories = ["./extensions"]
