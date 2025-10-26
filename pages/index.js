@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Sidebar from '../components/Sidebar';
-import ExitIframe from '../components/ExitIframe';
 import styles from '../styles/Home.module.css';
 
 export default function Home() {
@@ -41,15 +40,10 @@ export default function Home() {
       const res = await fetch(`/api/products?v=2&shop=${shop}`);
       const data = await res.json();
 
-      // Check for authentication error
-      if (data.error && data.authUrl) {
-        // If embedded, we need to redirect the parent window
-        if (isEmbedded) {
-          window.top.location.href = data.authUrl;
-        } else {
-          window.location.href = data.authUrl;
-        }
-        return;
+      // For custom apps, no OAuth redirects needed
+      if (data.error) {
+        console.error('Error fetching products:', data.error);
+        setMessage({ type: 'error', text: data.error });
       }
 
       setProducts(Array.isArray(data) ? data : []);
@@ -192,16 +186,12 @@ export default function Home() {
     }
   };
 
-  // If embedded and no shop, show ExitIframe to redirect parent
-  if (isEmbedded && !shop) {
-    return <ExitIframe />;
-  }
-
+  // For custom apps, shop parameter comes from query string
   if (!shop) {
     return (
       <div className={styles.loading}>
-        <p>No shop parameter found.</p>
-        <p>Please install the app from your Shopify admin or visit with ?shop=yourstore.myshopify.com</p>
+        <p>Loading...</p>
+        <p>If this persists, please ensure the app is accessed through Shopify Admin.</p>
       </div>
     );
   }
