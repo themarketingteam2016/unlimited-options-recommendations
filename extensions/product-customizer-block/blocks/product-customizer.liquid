@@ -425,61 +425,56 @@
           }
         });
 
+        // Always build editable option selectors for this recommendation
+        const optionSelectorsHTML = recAttributes.map(attr => {
+          const selectedValue = preFilledSelections[attr.id];
+          const matchedDetail = selectionDetails.find(d => d.attrName === attr.name);
+
+          return `
+            <div class="unlimited-rec-option">
+              <label class="unlimited-rec-option__label">${attr.name}:</label>
+              <select
+                class="unlimited-rec-option__select"
+                data-product-id="${productId}"
+                data-attribute-id="${attr.id}"
+              >
+                ${attr.values.map(value => `
+                  <option
+                    value="${value.id}"
+                    ${value.id === selectedValue ? 'selected' : ''}
+                  >
+                    ${value.value}
+                    ${value.id === selectedValue && matchedDetail?.matchType === 'exact' ? ' ✓' : ''}
+                    ${value.id === selectedValue && matchedDetail?.matchType === 'nearest' ? ' ~' : ''}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+          `;
+        }).join('');
+
+        // Check if current selections match a variant (for validation feedback)
         const matchedVariant = recVariants.find(variant => {
           return variant.variant_options?.every(opt =>
             preFilledSelections[opt.attribute.id] === opt.attribute_value.id
           );
         });
 
-        if (matchedVariant) {
-          // Build editable option selectors for this recommendation
-          const optionSelectorsHTML = recAttributes.map(attr => {
-            const selectedValue = preFilledSelections[attr.id];
-
-            return `
-              <div class="unlimited-rec-option">
-                <label class="unlimited-rec-option__label">${attr.name}:</label>
-                <select
-                  class="unlimited-rec-option__select"
-                  data-product-id="${productId}"
-                  data-attribute-id="${attr.id}"
-                >
-                  ${attr.values.map(value => `
-                    <option
-                      value="${value.id}"
-                      ${value.id === selectedValue ? 'selected' : ''}
-                    >
-                      ${value.value}
-                      ${value.id === selectedValue && selectionDetails.find(d => d.attrName === attr.name)?.matchType === 'exact' ? ' ✓' : ''}
-                      ${value.id === selectedValue && selectionDetails.find(d => d.attrName === attr.name)?.matchType === 'nearest' ? ' ~' : ''}
-                    </option>
-                  `).join('')}
-                </select>
-              </div>
-            `;
-          }).join('');
-
-          previewHTML += `
-            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--success">
-              <strong>${productName}:</strong>
-              <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
-                ${optionSelectorsHTML}
-              </div>
+        previewHTML += `
+          <div class="unlimited-bundle-preview__item ${matchedVariant ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
+            <strong>${productName}:</strong>
+            ${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : ''}
+            <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
+              ${optionSelectorsHTML}
             </div>
-          `;
-        } else {
-          previewHTML += `
-            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
-              <strong>${productName}:</strong> <span class="unlimited-error">No matching variant found</span>
-            </div>
-          `;
-        }
+          </div>
+        `;
       });
 
       previewHTML += `
         </div>
         <div class="unlimited-bundle-preview__note">
-          <small>✓ = Exact match | ~ = Nearest match | default = Using default value</small>
+          <small>✓ = Exact match from main product | ~ = Nearest match | You can change any option using the dropdowns above</small>
         </div>
       `;
 
@@ -1647,6 +1642,19 @@
 
 .unlimited-bundle-preview__item--success {
   border-left-color: #28a745;
+}
+
+.unlimited-bundle-preview__item--warning {
+  border-left-color: #ffc107;
+  background: #fffbf0;
+}
+
+.unlimited-warning-text {
+  color: #856404;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .unlimited-bundle-preview__item--error {
