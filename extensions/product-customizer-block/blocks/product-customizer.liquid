@@ -136,6 +136,9 @@
           shopifyProductId: shopifyProductId,
           shopifyFallbackVariantId: shopifyFallbackVariantId
         };
+
+        // Update price display if variants loaded
+        updateRecommendationPrice(internalProductId, variants);
       } else {
         recommendationVariantsCache[internalProductId] = {
           variants: [],
@@ -150,6 +153,17 @@
         shopifyProductId: shopifyProductId,
         shopifyFallbackVariantId: null
       };
+    }
+  }
+
+  function updateRecommendationPrice(productId, variants) {
+    const priceEl = container.querySelector(`.unlimited-recommendation-price[data-product-id="${productId}"]`);
+    if (priceEl && variants && variants.length > 0) {
+      // Find default variant or first variant
+      const defaultVariant = variants.find(v => v.is_default) || variants[0];
+      if (defaultVariant && defaultVariant.price) {
+        priceEl.innerHTML = `Starting from $${defaultVariant.price}`;
+      }
     }
   }
 
@@ -218,7 +232,9 @@
                       `}
                       <div class="unlimited-recommendation-info">
                         <div class="unlimited-recommendation-name">${product.title}</div>
-                        ${price ? `<div class="unlimited-recommendation-price">${price}</div>` : ''}
+                        <div class="unlimited-recommendation-price" data-product-id="${product.id}">
+                          ${price || '<span class="unlimited-price-loading">Loading price...</span>'}
+                        </div>
                       </div>
                     </label>
                   </div>
