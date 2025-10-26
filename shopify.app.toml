@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "ff7cd44448a97a45216a6a04d47281b0"
+client_id = "bdd553541eb847b5a22e67344cf409ca"
 name = "unlimited-options"
 application_url = "https://unlimtited-options-recommendations.vercel.app"
 embedded = true

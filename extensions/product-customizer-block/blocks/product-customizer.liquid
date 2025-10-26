@@ -1456,3 +1456,21 @@
   }
 }
 </style>
+
+{% schema %}
+{
+  "name": "Product Options Customize",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Customize Your Product"
+    }
+  ]
+}
+{% endschema %}
