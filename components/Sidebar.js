@@ -20,13 +20,13 @@ export default function Sidebar() {
           href="/"
           className={`${styles.navLink} ${isActive('/') && !isActive('/attributes') ? styles.active : ''}`}
         >
-          Products
+          <span>Products</span>
         </Link>
         <Link
           href="/attributes"
           className={`${styles.navLink} ${isActive('/attributes') ? styles.active : ''}`}
         >
-          Attributes
+          <span>Attributes</span>
         </Link>
       </nav>
     </div>

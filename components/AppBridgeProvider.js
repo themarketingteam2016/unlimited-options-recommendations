@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Provider } from '@shopify/app-bridge-react';
 import { useRouter } from 'next/router';
 
@@ -8,35 +8,28 @@ import { useRouter } from 'next/router';
  */
 export function AppBridgeProvider({ children }) {
   const router = useRouter();
+  const [config, setConfig] = useState(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Wait for router to be ready
+    // Wait for router to be ready and extract host
     if (router.isReady) {
+      const host = router.query.host;
+
+      if (host) {
+        console.log('[App Bridge] Initializing with host:', host);
+        setConfig({
+          apiKey: process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || 'ff7cd44448a97a45216a6a04d47281b0',
+          host: host,
+          forceRedirect: true,
+        });
+      } else {
+        console.warn('[App Bridge] No host parameter found');
+      }
+
       setIsReady(true);
     }
-  }, [router.isReady]);
-
-  const config = useMemo(() => {
-    if (!isReady) {
-      return null;
-    }
-
-    const host = router.query.host;
-
-    if (!host) {
-      console.warn('[App Bridge] No host parameter found');
-      return null;
-    }
-
-    console.log('[App Bridge] Initializing with host:', host);
-
-    return {
-      apiKey: process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || 'ff7cd44448a97a45216a6a04d47281b0',
-      host: host,
-      forceRedirect: true,
-    };
-  }, [isReady, router.query.host]);
+  }, [router.isReady, router.query.host]);
 
   // Show loading while waiting for router
   if (!isReady) {
@@ -71,9 +64,15 @@ export function AppBridgeProvider({ children }) {
     return <>{children}</>;
   }
 
-  return (
-    <Provider config={config}>
-      {children}
-    </Provider>
-  );
+  try {
+    return (
+      <Provider config={config}>
+        {children}
+      </Provider>
+    );
+  } catch (error) {
+    console.error('[App Bridge] Provider error:', error);
+    // Fallback: render children without App Bridge if Provider fails
+    return <>{children}</>;
+  }
 }
