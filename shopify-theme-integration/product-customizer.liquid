@@ -280,11 +280,35 @@
     recCheckboxes.forEach(checkbox => {
       checkbox.addEventListener('change', function() {
         const productId = this.dataset.productId;
+        const productName = this.dataset.productName;
 
+        // VALIDATION: Check if all main product options are selected
         if (this.checked) {
+          // Check if all required attributes have selections
+          const allOptionsSelected = attributes.every(attr => {
+            return selectedOptions[attr.id] !== undefined && selectedOptions[attr.id] !== null;
+          });
+
+          if (!allOptionsSelected) {
+            // Prevent selection
+            this.checked = false;
+
+            // Show validation message
+            const missingOptions = attributes
+              .filter(attr => !selectedOptions[attr.id])
+              .map(attr => attr.name)
+              .join(', ');
+
+            alert(`⚠️ Please select all options for the main product first.\n\nMissing: ${missingOptions}\n\nThen you can add "${productName}" to your bundle.`);
+            return;
+          }
+
+          // If validation passed, add to selections
           selectedRecommendations.add(productId);
+          console.log(`[Recommendations] Added ${productName} to bundle with auto-filled options`);
         } else {
           selectedRecommendations.delete(productId);
+          console.log(`[Recommendations] Removed ${productName} from bundle`);
         }
 
         updateVariant();
@@ -391,18 +415,38 @@
         });
 
         if (matchedVariant) {
+          // Build editable option selectors for this recommendation
+          const optionSelectorsHTML = recAttributes.map(attr => {
+            const selectedValue = preFilledSelections[attr.id];
+
+            return `
+              <div class="unlimited-rec-option">
+                <label class="unlimited-rec-option__label">${attr.name}:</label>
+                <select
+                  class="unlimited-rec-option__select"
+                  data-product-id="${productId}"
+                  data-attribute-id="${attr.id}"
+                >
+                  ${attr.values.map(value => `
+                    <option
+                      value="${value.id}"
+                      ${value.id === selectedValue ? 'selected' : ''}
+                    >
+                      ${value.value}
+                      ${value.id === selectedValue && selectionDetails.find(d => d.attrName === attr.name)?.matchType === 'exact' ? ' ✓' : ''}
+                      ${value.id === selectedValue && selectionDetails.find(d => d.attrName === attr.name)?.matchType === 'nearest' ? ' ~' : ''}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
+            `;
+          }).join('');
+
           previewHTML += `
             <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--success">
               <strong>${productName}:</strong>
-              <div class="unlimited-bundle-preview__options">
-                ${selectionDetails.map(detail => `
-                  <span class="unlimited-bundle-option">
-                    ${detail.attrName}: ${detail.value}
-                    ${detail.matchType === 'exact' ? '<span class="unlimited-match-badge">✓</span>' : ''}
-                    ${detail.matchType === 'nearest' ? '<span class="unlimited-match-badge unlimited-match-badge--nearest">~</span>' : ''}
-                    ${detail.matchType === 'default' ? '<span class="unlimited-match-badge unlimited-match-badge--default">default</span>' : ''}
-                  </span>
-                `).join('')}
+              <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
+                ${optionSelectorsHTML}
               </div>
             </div>
           `;
@@ -424,6 +468,20 @@
 
       preview.innerHTML = previewHTML;
       preview.style.display = 'block';
+
+      // Add event listeners to the new recommendation option selects
+      const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select');
+      recOptionSelects.forEach(select => {
+        select.addEventListener('change', function() {
+          console.log('[Recommendations] User changed option:', {
+            productId: this.dataset.productId,
+            attributeId: this.dataset.attributeId,
+            newValue: this.value
+          });
+          // Trigger a re-render of the preview to show updated selections
+          updateRecommendationPreview();
+        });
+      });
     }
 
     // Buy Now button (primary action)
@@ -743,10 +801,33 @@
           // Extract attributes for this recommendation
           const recAttributes = extractAttributes(recVariants);
 
-          // Build pre-filled selections
-          const preFilledSelections = {};
+          // Read user selections from the editable preview dropdowns (if available)
+          // Otherwise fall back to auto-filled values
+          const userSelections = {};
+          const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+
+          if (bundlePreview) {
+            const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
+            recSelects.forEach(select => {
+              const attrId = select.dataset.attributeId;
+              const valueId = select.value;
+              if (attrId && valueId) {
+                userSelections[attrId] = valueId;
+              }
+            });
+          }
+
+          console.log('[Bundle Add] User selections from dropdowns:', userSelections);
+
+          // Build pre-filled selections as fallback (for attributes not in userSelections)
+          const preFilledSelections = { ...userSelections };
 
           recAttributes.forEach(attr => {
+            // Skip if user already selected this attribute
+            if (preFilledSelections[attr.id]) {
+              return;
+            }
+
             // Try to match with main product selections
             const matchingMainSelection = Object.values(mainSelections).find(sel =>
               sel.attrName && attr.name &&
@@ -771,7 +852,7 @@
             }
           });
 
-          console.log('[Bundle Add] Pre-filled selections:', preFilledSelections);
+          console.log('[Bundle Add] Final selections (user + auto-fill):', preFilledSelections);
 
           // Find matching variant from pre-filled selections
           const matchedVariant = recVariants.find(variant => {
@@ -974,10 +1055,33 @@
           // Extract attributes for this recommendation
           const recAttributes = extractAttributes(recVariants);
 
-          // Build pre-filled selections
-          const preFilledSelections = {};
+          // Read user selections from the editable preview dropdowns (if available)
+          // Otherwise fall back to auto-filled values
+          const userSelections = {};
+          const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+
+          if (bundlePreview) {
+            const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
+            recSelects.forEach(select => {
+              const attrId = select.dataset.attributeId;
+              const valueId = select.value;
+              if (attrId && valueId) {
+                userSelections[attrId] = valueId;
+              }
+            });
+          }
+
+          console.log('[Buy Now] User selections from dropdowns:', userSelections);
+
+          // Build pre-filled selections as fallback
+          const preFilledSelections = { ...userSelections };
 
           recAttributes.forEach(attr => {
+            // Skip if user already selected this attribute
+            if (preFilledSelections[attr.id]) {
+              return;
+            }
+
             // Try to match with main product selections
             const matchingMainSelection = Object.values(mainSelections).find(sel =>
               sel.attrName && attr.name &&
@@ -1001,6 +1105,8 @@
               }
             }
           });
+
+          console.log('[Buy Now] Final selections (user + auto-fill):', preFilledSelections);
 
           // Find matching variant from pre-filled selections
           const matchedVariant = recVariants.find(variant => {
@@ -1558,6 +1664,49 @@
   border-top: 1px solid #dee2e6;
   color: #6c757d;
   font-size: 11px;
+}
+
+/* Editable recommendation options */
+.unlimited-rec-option {
+  margin-bottom: 10px;
+}
+
+.unlimited-rec-option__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #495057;
+}
+
+.unlimited-rec-option__select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.unlimited-rec-option__select:hover {
+  border-color: #80bdff;
+}
+
+.unlimited-rec-option__select:focus {
+  outline: none;
+  border-color: #008060;
+  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.1);
+}
+
+.unlimited-bundle-preview__options--editable {
+  display: block;
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
 }
 
 @media (max-width: 768px) {
