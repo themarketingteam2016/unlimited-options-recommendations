@@ -161,7 +161,7 @@ async function createCheckoutHandler(req, res) {
           },
           {
             key: '_product_handle',
-            value: variant.product.handle || ''
+            value: variant.product.shopify_handle || ''
           }
         ]
       });
