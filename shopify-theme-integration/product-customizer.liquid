@@ -28,6 +28,8 @@
   let selectedRecommendations = new Set();
   let recommendationVariantsCache = {};
   let productDataCache = {};
+  let recommendationUserSelections = {}; // Store user's manual selections for recommendations
+  let productDefaults = {}; // Store product-specific default values
 
   // Fetch product customizer data
   async function loadCustomizer() {
@@ -35,6 +37,17 @@
       // Fetch variants from your API
       const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
       const variantsData = await variantsRes.json();
+
+      // Fetch product-specific default values
+      try {
+        const defaultsRes = await fetch(`${APP_URL}/api/product-defaults?productId=${encodeURIComponent(productId)}`);
+        if (defaultsRes.ok) {
+          productDefaults = await defaultsRes.json();
+          console.log('🎯 [Customizer] Product-specific defaults loaded:', productDefaults);
+        }
+      } catch (err) {
+        console.warn('⚠️ [Customizer] Could not load product-specific defaults:', err);
+      }
 
       if (!variantsData || variantsData.length === 0) {
         container.innerHTML = '<p>No custom options available for this product.</p>';
@@ -63,13 +76,12 @@
 
       attributes = Object.values(uniqueAttrs);
 
-      // Debug: Log attributes to verify is_default flag
-      console.log('[Customizer] Loaded attributes:', attributes);
+      console.log('\n📦 [Customizer] Loaded product attributes:', attributes.length);
       attributes.forEach(attr => {
-        console.log(`[Customizer] ${attr.name} values:`, attr.values.map(v => ({
-          value: v.value,
-          is_default: v.is_default
-        })));
+        console.log(`\n   Attribute: ${attr.name}`);
+        attr.values.forEach(v => {
+          console.log(`      - ${v.value} ${v.is_default ? '⭐ (default)' : ''}`);
+        });
       });
 
       // Load recommendations
@@ -79,7 +91,6 @@
       renderCustomizer();
 
     } catch (error) {
-      console.error('Error loading customizer:', error);
       container.innerHTML = '<p>Error loading product options. Please refresh the page.</p>';
     }
   }
@@ -109,7 +120,6 @@
         }
       }
     } catch (error) {
-      console.error('Error loading recommendations:', error);
       recommendations = [];
     }
   }
@@ -124,20 +134,14 @@
         let shopifyFallbackVariantId = null;
         if (productHandle) {
           try {
-            console.log(`[Recommendation] Fetching Shopify product for fallback: /products/${productHandle}.js`);
             const shopifyResponse = await fetch(`/products/${productHandle}.js`);
             if (shopifyResponse.ok) {
               const shopifyProduct = await shopifyResponse.json();
               shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
-              console.log(`[Recommendation] Fallback variant ID for ${productHandle}:`, shopifyFallbackVariantId);
-            } else {
-              console.warn(`[Recommendation] Failed to fetch product ${productHandle}:`, shopifyResponse.status);
             }
           } catch (e) {
-            console.warn('[Recommendation] Could not fetch Shopify product for fallback:', e);
+            // Silently fail
           }
-        } else {
-          console.warn('[Recommendation] No product handle provided for fallback variant fetch');
         }
 
         recommendationVariantsCache[internalProductId] = {
@@ -156,7 +160,6 @@
         };
       }
     } catch (error) {
-      console.error('Error fetching variants:', error);
       recommendationVariantsCache[internalProductId] = {
         variants: [],
         shopifyProductId: shopifyProductId,
@@ -189,10 +192,10 @@
               </label>
 
               <select class="unlimited-option__select" data-attribute-id="${attr.id}">
-                <option value="">Choose ${attr.name}</option>
-                ${attr.values.map(value => `
-                  <option value="${value.id}" ${value.is_default ? 'selected' : ''}>${value.value}</option>
-                `).join('')}
+                ${attr.values.map(value => {
+                  const isDefault = value.is_default === true || value.is_default === 1 || value.is_default === '1' || value.is_default === 'true';
+                  return `<option value="${value.id}" ${isDefault ? 'selected' : ''}>${value.value}</option>`;
+                }).join('')}
               </select>
 
               <div class="unlimited-option__preview" style="display: none;">
@@ -217,11 +220,6 @@
 
                 const imageUrl = product.featuredImage?.url || product.image_url || '';
 
-                // Get the first variant's price as base price
-                const cachedData = recommendationVariantsCache[product.id];
-                const firstVariant = cachedData?.variants?.[0];
-                const price = firstVariant?.price ? `$${firstVariant.price}` : '';
-
                 return `
                   <div class="unlimited-recommendation-item" data-product-id="${product.id}">
                     <input
@@ -241,9 +239,6 @@
                       `}
                       <div class="unlimited-recommendation-info">
                         <div class="unlimited-recommendation-name">${product.title}</div>
-                        <div class="unlimited-recommendation-price" data-product-id="${product.id}">
-                          ${price || '<span class="unlimited-price-loading">Loading price...</span>'}
-                        </div>
                       </div>
                     </label>
                   </div>
@@ -331,10 +326,8 @@
 
           // If validation passed, add to selections
           selectedRecommendations.add(productId);
-          console.log(`[Recommendations] Added ${productName} to bundle with auto-filled options`);
         } else {
           selectedRecommendations.delete(productId);
-          console.log(`[Recommendations] Removed ${productName} from bundle`);
         }
 
         updateVariant();
@@ -391,6 +384,20 @@
         const selectionDetails = [];
 
         recAttributes.forEach(attr => {
+          // First check if user has manually selected a value for this attribute
+          if (recommendationUserSelections[productId] && recommendationUserSelections[productId][attr.id]) {
+            preFilledSelections[attr.id] = recommendationUserSelections[productId][attr.id];
+            const userValue = attr.values.find(v => v.id === recommendationUserSelections[productId][attr.id]);
+            if (userValue) {
+              selectionDetails.push({
+                attrName: attr.name,
+                value: userValue.value,
+                matchType: 'user'
+              });
+            }
+            return; // Skip auto-matching for this attribute
+          }
+
           const matchingMainSelection = Object.values(mainSelections).find(sel =>
             sel.attrName && attr.name &&
             sel.attrName.toLowerCase() === attr.name.toLowerCase()
@@ -469,10 +476,20 @@
           );
         });
 
+        // Get the price for the matched variant
+        const variantPrice = matchedVariant?.price ? `$${matchedVariant.price}` : '';
+        const priceDisplay = matchedVariant
+          ? `<div class="unlimited-bundle-price">Price: <strong>${variantPrice}</strong></div>`
+          : '<div class="unlimited-bundle-price unlimited-bundle-price--error">Select valid combination to see price</div>';
+
         previewHTML += `
           <div class="unlimited-bundle-preview__item ${matchedVariant ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
-            <strong>${productName}:</strong>
-            ${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : ''}
+            <div class="unlimited-bundle-item-header">
+              <strong>${productName}</strong>
+              <span class="unlimited-edit-badge">✏️ Editable</span>
+            </div>
+            ${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : '<div class="unlimited-success-text">✓ Valid selection</div>'}
+            ${priceDisplay}
             <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
               ${optionSelectorsHTML}
             </div>
@@ -483,7 +500,14 @@
       previewHTML += `
         </div>
         <div class="unlimited-bundle-preview__note">
-          <small>✓ = Exact match from main product | ~ = Nearest match | You can change any option using the dropdowns above</small>
+          <div class="unlimited-bundle-help-text">
+            <strong>💡 How it works:</strong>
+            <ul>
+              <li>Options are <strong>automatically matched</strong> from your main product selection</li>
+              <li>✓ = Exact match | ~ = Nearest match</li>
+              <li><strong>You can change any option</strong> using the dropdowns before adding to cart</li>
+            </ul>
+          </div>
         </div>
       `;
 
@@ -494,11 +518,18 @@
       const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select');
       recOptionSelects.forEach(select => {
         select.addEventListener('change', function() {
-          console.log('[Recommendations] User changed option:', {
-            productId: this.dataset.productId,
-            attributeId: this.dataset.attributeId,
-            newValue: this.value
-          });
+          const productId = this.dataset.productId;
+          const attributeId = this.dataset.attributeId;
+          const valueId = this.value;
+
+          // Store the user's manual selection
+          if (!recommendationUserSelections[productId]) {
+            recommendationUserSelections[productId] = {};
+          }
+          recommendationUserSelections[productId][attributeId] = valueId;
+
+          console.log(`✏️ User changed ${productId} attribute ${attributeId} to ${valueId}`);
+
           // Trigger a re-render of the preview to show updated selections
           updateRecommendationPreview();
         });
@@ -517,26 +548,39 @@
   }
 
   function initializeDefaultSelections() {
-    console.log('[Customizer] Initializing default selections');
-    console.log('[Customizer] Attributes available:', attributes.length);
+    console.log('==============================================');
+    console.log('🔧 DEFAULT OPTIONS INITIALIZATION STARTING');
+    console.log('==============================================');
+    console.log('[Default Selection] Total attributes to process:', attributes.length);
 
     if (!attributes || attributes.length === 0) {
-      console.error('[Customizer] No attributes to initialize defaults from!');
+      console.error('❌ [Default Selection] No attributes available!');
       return;
     }
 
     let defaultsFound = 0;
 
-    // Auto-select default values
+    // Auto-select default values (product-specific)
     attributes.forEach(attr => {
-      console.log(`[Customizer] Processing attribute: ${attr.name}, values:`, attr.values.length);
+      console.log(`\n📋 [Default Selection] Processing: "${attr.name}"`);
+      console.log(`   Available values count: ${attr.values.length}`);
 
-      const defaultValue = attr.values.find(v => v.is_default === true);
+      // Check if this attribute has a product-specific default
+      const attrIdStr = String(attr.id);
+      const productSpecificDefaultId = productDefaults[attrIdStr];
+
+      let defaultValue = null;
+      if (productSpecificDefaultId) {
+        defaultValue = attr.values.find(v => String(v.id) === String(productSpecificDefaultId));
+        console.log(`   🎯 Product-specific default found: "${defaultValue?.value || 'NOT FOUND'}"`);
+      } else {
+        console.log(`   ℹ️  No product-specific default set for "${attr.name}"`);
+      }
 
       if (defaultValue) {
         selectedOptions[attr.id] = defaultValue.id;
         defaultsFound++;
-        console.log(`[Customizer] ✓ Auto-selected default for ${attr.name}: ${defaultValue.value} (id: ${defaultValue.id})`);
+        console.log(`   ✅ AUTO-SELECTED: "${defaultValue.value}" for "${attr.name}"`);
 
         // Show image preview for default selection
         const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
@@ -554,25 +598,17 @@
           }
         }
       } else {
-        console.warn(`[Customizer] ⚠️ No default value found for ${attr.name}`);
-        console.warn(`[Customizer] Available values:`, attr.values.map(v => `${v.value} (is_default: ${v.is_default})`));
-
-        // Fallback: select first value if no default
-        if (attr.values.length > 0) {
-          const firstValue = attr.values[0];
-          selectedOptions[attr.id] = firstValue.id;
-          console.log(`[Customizer] Fallback: Selected first value for ${attr.name}: ${firstValue.value}`);
-
-          const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
-          if (select) {
-            select.value = firstValue.id;
-          }
-        }
+        console.warn(`   ⚠️  NO PRODUCT-SPECIFIC DEFAULT for "${attr.name}" - leaving unselected`);
+        // Don't auto-select anything if no product-specific default is set
+        // This ensures each product has independent defaults
       }
     });
 
-    console.log(`[Customizer] Initialized ${defaultsFound} default selections out of ${attributes.length} attributes`);
-    console.log('[Customizer] Selected options:', selectedOptions);
+    console.log('\n==============================================');
+    console.log(`✨ DEFAULT SELECTION COMPLETE`);
+    console.log(`   Defaults found: ${defaultsFound} / ${attributes.length}`);
+    console.log(`   Selected options:`, selectedOptions);
+    console.log('==============================================\n');
 
     // Update variant info to show price and details
     updateVariant();
@@ -798,11 +834,6 @@
     try {
       const itemsToAdd = [];
 
-      console.log('[Bundle Add] Starting bundle add to cart', {
-        mainVariant: selectedVariant.id,
-        selectedRecommendations: Array.from(selectedRecommendations)
-      });
-
       // Add main product via API first
       const apiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
         method: 'POST',
@@ -819,15 +850,10 @@
       }
 
       const apiData = await apiResponse.json();
-      console.log('[Bundle Add] Main product API response:', apiData);
 
       // Handle fallback mode for custom variants
       if (apiData.fallback && apiData.variant) {
         const productVariantId = {{ product.variants.first.id }};
-        console.log('[Bundle Add] Using fallback mode for main product');
-        console.log('[Bundle Add] Shopify variant ID:', productVariantId);
-        console.log('[Bundle Add] Properties from API:', apiData.variant.properties);
-        console.log('[Bundle Add] DEBUG: _custom_variant_id from API:', apiData.variant.properties?._custom_variant_id);
 
         // Use properties from API response
         const properties = apiData.variant.properties || {
@@ -835,17 +861,11 @@
           '_Price': `$${apiData.variant.price}`
         };
 
-        console.log('[Bundle Add] DEBUG: properties object to use:', properties);
-        console.log('[Bundle Add] DEBUG: _custom_variant_id in properties:', properties._custom_variant_id);
-
         itemsToAdd.push({
           id: productVariantId,
           quantity: 1,
           properties: properties
         });
-
-        console.log('[Bundle Add] Main product cart item:', itemsToAdd[itemsToAdd.length - 1]);
-        console.log('[Bundle Add] DEBUG: _custom_variant_id in cart item:', itemsToAdd[itemsToAdd.length - 1].properties._custom_variant_id);
       } else if (apiData.success && apiData.shopifyVariantId) {
         // Direct Shopify variant (if synced)
         itemsToAdd.push({
@@ -853,28 +873,17 @@
           quantity: 1
         });
       } else {
-        console.error('[Bundle Add] Unexpected API response format:', apiData);
         throw new Error('Invalid API response format');
       }
 
       // Handle recommendations with smart pre-fill if any selected
       if (selectedRecommendations.size > 0) {
         const mainSelections = getMainProductSelections();
-        console.log('[Bundle Add] Main selections:', mainSelections);
-
         const recommendationErrors = [];
 
         for (const productId of selectedRecommendations) {
-          console.log('[Bundle Add] Processing recommendation:', productId);
-
           const cachedData = recommendationVariantsCache[productId];
           const recVariants = cachedData?.variants || [];
-
-          console.log('[Bundle Add] Recommendation variants:', {
-            productId,
-            variantCount: recVariants.length,
-            variants: recVariants
-          });
 
           if (recVariants.length === 0) {
             recommendationErrors.push(`Product ${productId} has no variants`);
@@ -899,8 +908,6 @@
               }
             });
           }
-
-          console.log('[Bundle Add] User selections from dropdowns:', userSelections);
 
           // Build pre-filled selections as fallback (for attributes not in userSelections)
           const preFilledSelections = { ...userSelections };
@@ -935,16 +942,12 @@
             }
           });
 
-          console.log('[Bundle Add] Final selections (user + auto-fill):', preFilledSelections);
-
           // Find matching variant from pre-filled selections
           const matchedVariant = recVariants.find(variant => {
             return variant.variant_options?.every(opt =>
               preFilledSelections[opt.attribute.id] === opt.attribute_value.id
             );
           });
-
-          console.log('[Bundle Add] Matched variant:', matchedVariant);
 
           if (matchedVariant) {
             // Add recommendation via API
@@ -960,7 +963,6 @@
 
               if (recApiResponse.ok) {
                 const recApiData = await recApiResponse.json();
-                console.log('[Bundle Add] Recommendation API response:', recApiData);
 
                 if (recApiData.fallback && recApiData.variant) {
                   // Fallback mode: use Shopify product's first variant with properties
@@ -972,7 +974,6 @@
                       quantity: 1,
                       properties: recApiData.variant.properties || {}
                     });
-                    console.log('[Bundle Add] Added recommendation (fallback):', shopifyFallbackVariantId);
                   } else {
                     recommendationErrors.push(`No fallback variant for product ${productId}`);
                   }
@@ -982,37 +983,26 @@
                     id: recApiData.shopifyVariantId,
                     quantity: 1
                   });
-                  console.log('[Bundle Add] Added recommendation (direct):', recApiData.shopifyVariantId);
                 }
               } else {
                 recommendationErrors.push(`API error for product ${productId}`);
               }
             } catch (err) {
-              console.error('[Bundle Add] Error adding recommendation:', err);
               recommendationErrors.push(`Error adding product ${productId}: ${err.message}`);
             }
           } else {
             recommendationErrors.push(`No matching variant found for product ${productId}`);
           }
         }
-
-        if (recommendationErrors.length > 0) {
-          console.warn('[Bundle Add] Some recommendations failed:', recommendationErrors);
-        }
       }
-
-      console.log('[Bundle Add] Final items to add:', itemsToAdd);
-      console.log('[Bundle Add] Number of items to add:', itemsToAdd.length);
 
       // Validate all items have valid IDs
       const invalidItems = itemsToAdd.filter(item => !item.id || item.id === '0' || item.id === 0);
       if (invalidItems.length > 0) {
-        console.error('[Bundle Add] Invalid items detected:', invalidItems);
         throw new Error(`${invalidItems.length} items have invalid variant IDs`);
       }
 
       // Add all items to cart
-      console.log('[Bundle Add] Sending request to /cart/add.js...');
       const response = await fetch('/cart/add.js', {
         method: 'POST',
         headers: {
@@ -1021,29 +1011,18 @@
         body: JSON.stringify({ items: itemsToAdd })
       });
 
-      console.log('[Bundle Add] Cart response status:', response.status);
-      console.log('[Bundle Add] Cart response ok:', response.ok);
-
       const cartResponseText = await response.text();
-      console.log('[Bundle Add] Raw cart response:', cartResponseText);
 
       let cartData;
       try {
         cartData = JSON.parse(cartResponseText);
       } catch (e) {
-        console.error('[Bundle Add] Failed to parse cart response:', e);
         throw new Error('Invalid cart response format');
       }
 
       if (!response.ok) {
-        console.error('[Bundle Add] Cart add error:', cartData);
-        console.error('[Bundle Add] Error description:', cartData.description);
-        console.error('[Bundle Add] Error message:', cartData.message);
         throw new Error(cartData.description || cartData.message || 'Failed to add to cart');
       }
-
-      console.log('[Bundle Add] Cart add success:', cartData);
-      console.log('[Bundle Add] Items actually added:', cartData.items?.length || 'unknown');
 
       // Success!
       addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
@@ -1075,9 +1054,8 @@
         .then(r => r.json())
         .then(cart => {
           document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
-          console.log('[Bundle Add] Cart refreshed:', cart);
         })
-        .catch(e => console.error('[Bundle Add] Cart refresh error:', e));
+        .catch(e => {});
 
       // Reset after 2 seconds
       setTimeout(() => {
@@ -1085,7 +1063,6 @@
         addToCartBtn.disabled = false;
       }, 2000);
     } catch (error) {
-      console.error('[Bundle Add] Error adding to cart:', error);
       addToCartBtn.textContent = 'Error - Try Again';
 
       alert(`Failed to add to cart: ${error.message}\n\nCheck console for details.`);
@@ -1108,11 +1085,6 @@
     try {
       const itemsToProcess = [];
 
-      console.log('[Buy Now] Starting checkout creation', {
-        mainVariant: selectedVariant.id,
-        selectedRecommendations: Array.from(selectedRecommendations)
-      });
-
       // Add main product
       itemsToProcess.push({
         variantId: selectedVariant.id,
@@ -1122,16 +1094,12 @@
       // Handle recommendations with smart pre-fill if any selected
       if (selectedRecommendations.size > 0) {
         const mainSelections = getMainProductSelections();
-        console.log('[Buy Now] Main selections:', mainSelections);
 
         for (const productId of selectedRecommendations) {
-          console.log('[Buy Now] Processing recommendation:', productId);
-
           const cachedData = recommendationVariantsCache[productId];
           const recVariants = cachedData?.variants || [];
 
           if (recVariants.length === 0) {
-            console.warn('[Buy Now] Skipping recommendation - no variants:', productId);
             continue;
           }
 
@@ -1153,8 +1121,6 @@
               }
             });
           }
-
-          console.log('[Buy Now] User selections from dropdowns:', userSelections);
 
           // Build pre-filled selections as fallback
           const preFilledSelections = { ...userSelections };
@@ -1189,8 +1155,6 @@
             }
           });
 
-          console.log('[Buy Now] Final selections (user + auto-fill):', preFilledSelections);
-
           // Find matching variant from pre-filled selections
           const matchedVariant = recVariants.find(variant => {
             return variant.variant_options?.every(opt =>
@@ -1203,14 +1167,9 @@
               variantId: matchedVariant.id,
               quantity: 1
             });
-            console.log('[Buy Now] Added recommendation:', matchedVariant.id);
-          } else {
-            console.warn('[Buy Now] No matching variant for recommendation:', productId);
           }
         }
       }
-
-      console.log('[Buy Now] Creating checkout with items:', itemsToProcess);
 
       // Call create-checkout API
       const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
@@ -1221,10 +1180,7 @@
         body: JSON.stringify({ items: itemsToProcess })
       });
 
-      console.log('[Buy Now] Checkout response status:', response.status);
-
       const data = await response.json();
-      console.log('[Buy Now] Checkout response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || data.message || 'Failed to create checkout');
@@ -1233,8 +1189,6 @@
       if (!data.success || !data.checkoutUrl) {
         throw new Error('No checkout URL returned');
       }
-
-      console.log('[Buy Now] Redirecting to checkout:', data.checkoutUrl);
 
       // Clear recommendation selections
       selectedRecommendations.clear();
@@ -1251,7 +1205,6 @@
       window.location.href = data.checkoutUrl;
 
     } catch (error) {
-      console.error('[Buy Now] Error creating checkout:', error);
       buyNowBtn.textContent = 'Error - Try Again';
 
       alert(`Failed to create checkout: ${error.message}\n\nCheck console for details.`);
@@ -1274,15 +1227,11 @@
 
 // Cart Checkout Interception for Custom Variants
 (function() {
-  console.log('[Cart Checkout] Initializing checkout interception');
-
   async function interceptCheckout(event) {
     try {
       // Get current cart
       const cartResponse = await fetch('/cart.js');
       const cart = await cartResponse.json();
-
-      console.log('[Cart Checkout] Current cart:', cart);
 
       // Check if cart has custom variants (items with _custom_variant_id property)
       const customItems = cart.items.filter(item =>
@@ -1290,15 +1239,12 @@
       );
 
       if (customItems.length === 0) {
-        console.log('[Cart Checkout] No custom variants in cart, allowing normal checkout');
         return; // Allow normal checkout
       }
 
       // Prevent default checkout
       event.preventDefault();
       event.stopPropagation();
-
-      console.log('[Cart Checkout] Found custom variants, intercepting checkout:', customItems);
 
       // Show loading state
       const button = event.target.closest('button, a, [type="submit"]');
@@ -1314,8 +1260,6 @@
         quantity: item.quantity
       }));
 
-      console.log('[Cart Checkout] Creating Draft Order with items:', items);
-
       // Call create-checkout API
       const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
         method: 'POST',
@@ -1326,7 +1270,6 @@
       });
 
       const data = await response.json();
-      console.log('[Cart Checkout] API response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || data.message || 'Failed to create checkout');
@@ -1337,11 +1280,9 @@
       }
 
       // Redirect to Draft Order checkout
-      console.log('[Cart Checkout] Redirecting to:', data.checkoutUrl);
       window.location.href = data.checkoutUrl;
 
     } catch (error) {
-      console.error('[Cart Checkout] Error:', error);
       alert(`Failed to create checkout: ${error.message}\n\nPlease try again or contact support.`);
 
       // Restore button state
@@ -1364,11 +1305,8 @@
       'button.checkout'
     );
 
-    console.log('[Cart Checkout] Found checkout buttons:', checkoutButtons.length);
-
     checkoutButtons.forEach(button => {
       button.addEventListener('click', interceptCheckout, true); // Use capture phase
-      console.log('[Cart Checkout] Attached listener to button:', button);
     });
   }
 
@@ -1389,7 +1327,7 @@
 
 <style>
 .unlimited-customizer {
-  margin: 30px 0;
+  margin: 20px 0;
   padding: 20px;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
@@ -1403,9 +1341,9 @@
 }
 
 .unlimited-customizer__title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   color: #333;
 }
 
@@ -1414,28 +1352,36 @@
 }
 
 .unlimited-option {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .unlimited-option__label {
   display: block;
   font-weight: 600;
-  margin-bottom: 8px;
+  font-size: 14px;
+  margin-bottom: 6px;
   color: #333;
 }
 
 .unlimited-option__select {
   width: 100%;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border: 1px solid #d1d1d1;
+  border-radius: 6px;
   font-size: 14px;
   background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.unlimited-option__select:hover {
+  border-color: #008060;
 }
 
 .unlimited-option__select:focus {
   outline: none;
   border-color: #008060;
+  box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
 }
 
 .unlimited-option__preview {
@@ -1453,21 +1399,23 @@
 }
 
 .unlimited-customizer__variant-info {
-  margin: 20px 0;
-  padding: 15px;
-  background: #f9f9f9;
-  border-radius: 4px;
+  margin: 16px 0;
+  padding: 14px;
+  background: #f7faf9;
+  border-radius: 6px;
+  border: 1px solid #d4e9e3;
 }
 
 .unlimited-variant-price {
-  font-size: 24px;
+  font-size: 22px;
+  font-weight: 700;
   color: #008060;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .unlimited-variant-sku {
   font-size: 12px;
-  color: #999;
+  color: #666;
 }
 
 .unlimited-customizer__actions {
@@ -1480,32 +1428,25 @@
 .unlimited-buy-now {
   flex: 1;
   min-width: 200px;
-  padding: 16px 32px;
-  font-size: 18px;
-  font-weight: 700;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   background: #008060;
   color: white;
-  transition: all 0.2s;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(0, 128, 96, 0.3);
+  transition: background 0.2s;
 }
 
 .unlimited-buy-now:hover:not(:disabled) {
   background: #006e52;
-  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.4);
-  transform: translateY(-1px);
 }
 
 .unlimited-buy-now:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
   background: #999;
-  box-shadow: none;
-  transform: none;
 }
 
 .unlimited-add-to-cart {
@@ -1551,16 +1492,16 @@
 
 /* Recommendations Styles */
 .unlimited-recommendations {
-  margin: 24px 0;
-  padding: 20px;
+  margin: 20px 0;
+  padding: 16px;
   background: #f9f9f9;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .unlimited-recommendations__title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   color: #333;
 }
 
@@ -1572,7 +1513,7 @@
 
 .unlimited-recommendation-item {
   position: relative;
-  flex: 0 0 150px;
+  flex: 0 0 140px;
 }
 
 .unlimited-recommendation-checkbox {
@@ -1590,38 +1531,36 @@
   display: block;
   cursor: pointer;
   border: 2px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
-  transition: all 0.2s;
+  transition: border-color 0.2s;
   background: white;
 }
 
 .unlimited-recommendation-label:hover {
   border-color: #008060;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .unlimited-recommendation-item input:checked + .unlimited-recommendation-label {
   border-color: #008060;
-  box-shadow: 0 4px 12px rgba(0, 128, 96, 0.3);
 }
 
 .unlimited-recommendation-image {
-  width: 150px;
-  height: 150px;
+  width: 140px;
+  height: 140px;
   object-fit: cover;
   display: block;
 }
 
 .unlimited-recommendation-placeholder {
-  width: 150px;
-  height: 150px;
+  width: 140px;
+  height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f0f0f0;
   color: #999;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .unlimited-recommendation-info {
@@ -1650,11 +1589,11 @@
 
 /* Bundle Preview Styles */
 .unlimited-bundle-preview {
-  margin: 20px 0;
-  padding: 16px;
+  margin: 16px 0;
+  padding: 14px;
   background: #f0f7f4;
   border: 2px solid #008060;
-  border-radius: 8px;
+  border-radius: 6px;
   display: none;
 }
 
@@ -1662,7 +1601,7 @@
   font-size: 15px;
   font-weight: 600;
   color: #006e52;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .unlimited-bundle-preview__items {
@@ -1674,7 +1613,7 @@
 .unlimited-bundle-preview__item {
   padding: 10px;
   background: white;
-  border-radius: 6px;
+  border-radius: 4px;
   border-left: 3px solid #ddd;
 }
 
@@ -1755,11 +1694,78 @@
 }
 
 .unlimited-bundle-preview__note {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #dee2e6;
-  color: #6c757d;
-  font-size: 11px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #e7f5f3;
+  border-radius: 6px;
+  border-left: 4px solid #008060;
+}
+
+.unlimited-bundle-help-text {
+  font-size: 12px;
+  color: #2c5f5a;
+}
+
+.unlimited-bundle-help-text strong {
+  color: #008060;
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.unlimited-bundle-help-text ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.unlimited-bundle-help-text li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.unlimited-bundle-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.unlimited-edit-badge {
+  background: #008060;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.unlimited-success-text {
+  color: #28a745;
+  font-size: 12px;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.unlimited-bundle-price {
+  font-size: 14px;
+  color: #008060;
+  margin: 6px 0;
+  padding: 6px 10px;
+  background: #e7f5f3;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.unlimited-bundle-price strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: #004c3f;
+}
+
+.unlimited-bundle-price--error {
+  color: #856404;
+  background: #fff3cd;
+  font-size: 12px;
 }
 
 /* Editable recommendation options */
@@ -1769,7 +1775,7 @@
 
 .unlimited-rec-option__label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   margin-bottom: 4px;
   color: #495057;
@@ -1778,7 +1784,7 @@
 .unlimited-rec-option__select {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ced4da;
+  border: 1px solid #d1d1d1;
   border-radius: 4px;
   font-size: 13px;
   background: white;
@@ -1787,7 +1793,7 @@
 }
 
 .unlimited-rec-option__select:hover {
-  border-color: #80bdff;
+  border-color: #008060;
 }
 
 .unlimited-rec-option__select:focus {
@@ -1798,11 +1804,11 @@
 
 .unlimited-bundle-preview__options--editable {
   display: block;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 10px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
+  background: #f9f9f9;
+  border-radius: 4px;
+  border: 1px dashed #ddd;
 }
 
 @media (max-width: 768px) {
