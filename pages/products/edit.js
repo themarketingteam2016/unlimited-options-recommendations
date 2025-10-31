@@ -75,21 +75,17 @@ export default function ProductEdit() {
 
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
 
-      // Track default values from attributes
+      // Load product-specific default values from product_attributes table
+      const defaultsRes = await fetch(`/api/product-defaults?productId=${encodeURIComponent(productId)}`);
+      const productDefaults = await defaultsRes.json();
+      console.log('Product-specific default values loaded:', productDefaults);
+
+      // Convert to string keys for consistency
       const defaultVals = {};
-      if (Array.isArray(attrsData)) {
-        attrsData.forEach(attr => {
-          console.log(`Checking attribute ${attr.name} (${attr.id}) for defaults:`, attr.attribute_values);
-          attr.attribute_values?.forEach(val => {
-            console.log(`  - Value: ${val.value} (${val.id}), is_default:`, val.is_default);
-            if (val.is_default) {
-              defaultVals[String(attr.id)] = String(val.id);
-              console.log(`    ✓ Set as default!`);
-            }
-          });
-        });
-      }
-      console.log('Default values loaded:', defaultVals);
+      Object.keys(productDefaults).forEach(attrId => {
+        defaultVals[String(attrId)] = String(productDefaults[attrId]);
+      });
+
       setDefaultValues(defaultVals);
 
       // Fetch all products
@@ -661,7 +657,8 @@ export default function ProductEdit() {
       // Check if this value is already default (with string comparison)
       const isCurrentlyDefault = defaultValues[attrIdStr] === valueIdStr;
 
-      console.log('Toggling default:', {
+      console.log('Toggling product-specific default:', {
+        productId,
         attributeId: attrIdStr,
         valueId: valueIdStr,
         currentValue: value.value,
@@ -670,13 +667,20 @@ export default function ProductEdit() {
         newDefaultState: !isCurrentlyDefault
       });
 
-      // Update the default value
-      const res = await fetch(`/api/attributes/values/${valueId}`, {
-        method: 'PUT',
+      // Prepare the new default value for this attribute
+      const newDefaults = {
+        ...defaultValues,
+        [attrIdStr]: isCurrentlyDefault ? null : valueIdStr
+      };
+
+      // Save product-specific default
+      const res = await fetch(`/api/product-defaults?productId=${encodeURIComponent(productId)}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          value: value.value,
-          isDefault: !isCurrentlyDefault
+          defaults: {
+            [attrIdStr]: isCurrentlyDefault ? null : valueIdStr
+          }
         })
       });
 
@@ -685,19 +689,16 @@ export default function ProductEdit() {
         throw new Error(errorData.error || 'Failed to update default');
       }
 
-      const updatedData = await res.json();
-      console.log('Default updated successfully:', updatedData);
+      console.log('Product-specific default updated successfully');
+
+      // Update local state
+      setDefaultValues(newDefaults);
 
       setMessage({
         type: 'success',
-        text: isCurrentlyDefault ? 'Default removed' : 'Set as default!'
+        text: isCurrentlyDefault ? 'Default removed for this product' : 'Set as default for this product!'
       });
       setTimeout(() => setMessage(null), 2000);
-
-      // Refresh all data to get the updated defaults
-      console.log('Refreshing data after toggle...');
-      await fetchData();
-      console.log('Data refreshed, new defaultValues:', defaultValues);
     } catch (error) {
       console.error('Toggle default error:', error);
       setMessage({ type: 'error', text: `Failed to update: ${error.message}` });
@@ -823,7 +824,7 @@ export default function ProductEdit() {
                       const valIdStr = String(val.id);
                       const attrIdStr = String(attr.id);
                       const isSelected = selectedValues[attrIdStr]?.includes(valIdStr) || false;
-                      const isDefault = String(defaultValues[attrIdStr]) === valIdStr || val.is_default;
+                      const isDefault = String(defaultValues[attrIdStr]) === valIdStr;
 
                       return (
                         <div
@@ -861,7 +862,7 @@ export default function ProductEdit() {
                                 color: '#ffd700',
                                 transition: 'all 0.2s'
                               }}
-                              title={isDefault ? 'Remove as default' : 'Set as default'}
+                              title={isDefault ? 'Remove as default for this product' : 'Set as default for this product'}
                             >
                               {isDefault ? '★' : '☆'}
                             </button>
