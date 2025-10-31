@@ -46,6 +46,14 @@ export default function EmbedWidget() {
       console.log('Embed Widget - Variants Response:', variantsData);
       setVariants(Array.isArray(variantsData) ? variantsData : []);
 
+      // Fetch product-specific default values
+      const defaultsRes = await fetch(`/api/product-defaults?productId=${encodeURIComponent(id)}`);
+      let productDefaults = {};
+      if (defaultsRes.ok) {
+        productDefaults = await defaultsRes.json();
+        console.log('Embed Widget - Product-specific defaults loaded:', productDefaults);
+      }
+
       // Extract unique attributes
       if (variantsData && variantsData.length > 0) {
         const uniqueAttrs = {};
@@ -72,16 +80,17 @@ export default function EmbedWidget() {
         console.log('Embed Widget - Extracted Attributes:', extractedAttributes);
         setAttributes(extractedAttributes);
 
-        // Pre-select default values
+        // Pre-select default values (product-specific)
         const defaultOptions = {};
         extractedAttributes.forEach(attr => {
-          const defaultValue = attr.values.find(v => v.is_default);
-          if (defaultValue) {
-            defaultOptions[attr.id] = defaultValue.id;
+          // Use product-specific default if available
+          const attrIdStr = String(attr.id);
+          if (productDefaults[attrIdStr]) {
+            defaultOptions[attr.id] = productDefaults[attrIdStr];
           }
         });
         if (Object.keys(defaultOptions).length > 0) {
-          console.log('Embed Widget - Setting default options:', defaultOptions);
+          console.log('Embed Widget - Setting product-specific default options:', defaultOptions);
           setSelectedOptions(defaultOptions);
         }
       } else {
