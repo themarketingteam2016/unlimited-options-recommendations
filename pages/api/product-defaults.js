@@ -8,6 +8,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Convert Shopify product ID to internal UUID
+    const { data: productData, error: productError } = await supabaseAdmin
+      .from('products')
+      .select('id')
+      .eq('shopify_product_id', productId)
+      .single();
+
+    if (productError || !productData) {
+      console.error('Error finding product:', productError);
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const internalProductId = productData.id;
+
     if (req.method === 'GET') {
       // Get product-specific default values
       const { data, error } = await supabaseAdmin
@@ -16,7 +30,7 @@ export default async function handler(req, res) {
           attribute_id,
           default_value_id
         `)
-        .eq('product_id', productId);
+        .eq('product_id', internalProductId);
 
       if (error) {
         console.error('Error fetching product defaults:', error);
@@ -45,7 +59,7 @@ export default async function handler(req, res) {
       const updates = [];
       for (const [attributeId, valueId] of Object.entries(defaults)) {
         updates.push({
-          product_id: productId,
+          product_id: internalProductId,
           attribute_id: attributeId,
           default_value_id: valueId || null
         });
