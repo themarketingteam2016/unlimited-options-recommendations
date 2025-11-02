@@ -31,20 +31,23 @@ export default function Dashboard() {
       setLoading(true);
 
       // Fetch all data in parallel
-      const [productsRes, variantsRes, attributesRes] = await Promise.all([
+      const [productsRes, variantsRes, attributesRes, ordersRes] = await Promise.all([
         fetch(`/api/products?shop=${shop}`),
         fetch('/api/variants'),
-        fetch('/api/attributes')
+        fetch('/api/attributes'),
+        fetch('/api/orders/count')
       ]);
 
       const products = await productsRes.json();
       const variants = await variantsRes.json();
       const attributes = await attributesRes.json();
+      const orders = await ordersRes.json();
 
       // Calculate stats
       const totalProducts = Array.isArray(products) ? products.length : 0;
       const totalVariants = Array.isArray(variants) ? variants.length : 0;
       const totalAttributes = Array.isArray(attributes) ? attributes.length : 0;
+      const totalOrders = orders.count || 0;
 
       // Count active products
       const activeProducts = Array.isArray(products)
@@ -61,7 +64,8 @@ export default function Dashboard() {
         activeProducts,
         totalVariants,
         activeVariants,
-        totalAttributes
+        totalAttributes,
+        totalOrders
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -70,7 +74,8 @@ export default function Dashboard() {
         activeProducts: 0,
         totalVariants: 0,
         activeVariants: 0,
-        totalAttributes: 0
+        totalAttributes: 0,
+        totalOrders: 0
       });
     } finally {
       setLoading(false);
@@ -106,6 +111,20 @@ export default function Dashboard() {
         ) : (
           <>
             <div className={styles.statsGrid}>
+              {/* Total Orders */}
+              <div className={styles.statCard}>
+                <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
+                  🛒
+                </div>
+                <div className={styles.statContent}>
+                  <h3 className={styles.statLabel}>Total Orders</h3>
+                  <p className={styles.statValue}>{stats?.totalOrders || 0}</p>
+                  <p className={styles.statSubtext}>
+                    All time
+                  </p>
+                </div>
+              </div>
+
               {/* Total Products */}
               <div className={styles.statCard}>
                 <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
