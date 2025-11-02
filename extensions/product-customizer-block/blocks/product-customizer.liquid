@@ -70,6 +70,51 @@ renderCustomizer();
 container.innerHTML = '<p>Error loading product options. Please refresh the page.</p>';
 }
 }
+function updateMainProductImage(imageUrl, altText) {
+try {
+const selectors = [
+'.product__media img',
+'.product-single__photo img',
+'.product__image img',
+'.product-featured-img',
+'.product__main-photos img',
+'.product-images img',
+'.product-image img',
+'.featured-image img',
+'[data-product-featured-image]',
+'[data-product-single-media-wrapper] img',
+'.product-gallery img',
+'img[data-image-id]',
+'.main-product-image img',
+'.product-photo-container img',
+'[data-product-image]'
+];
+let mainImage = null;
+for (const selector of selectors) {
+const elements = document.querySelectorAll(selector);
+if (elements.length > 0) {
+mainImage = elements[0];
+break;
+}
+}
+if (mainImage) {
+mainImage.src = imageUrl;
+mainImage.alt = altText;
+const pictureParent = mainImage.closest('picture');
+if (pictureParent) {
+const sources = pictureParent.querySelectorAll('source');
+sources.forEach(source => {
+source.srcset = imageUrl;
+});
+}
+document.dispatchEvent(new CustomEvent('product:image:changed', {
+detail: { imageUrl, altText }
+}));
+}
+} catch (error) {
+console.error('Error updating main product image:', error);
+}
+}
 async function loadRecommendations() {
 try {
 const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/recommendations`);
@@ -266,6 +311,7 @@ if (value?.image_url) {
 previewImg.src = value.image_url;
 previewImg.alt = value.value;
 preview.style.display = 'block';
+updateMainProductImage(value.image_url, value.value);
 } else {
 preview.style.display = 'none';
 }
@@ -1160,16 +1206,7 @@ border-color: #008060;
 box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
 }
 .unlimited-option__preview {
-margin-top: 10px;
-padding: 10px;
-background: #f9f9f9;
-border-radius: 4px;
-text-align: center;
-}
-.unlimited-option__image {
-max-width: 80px;
-height: auto;
-border-radius: 4px;
+display: none !important;
 }
 .unlimited-customizer__variant-info {
 margin: 16px 0;
