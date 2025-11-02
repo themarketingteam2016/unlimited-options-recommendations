@@ -34,6 +34,8 @@ export default function ProductEdit() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('attributes');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [initialState, setInitialState] = useState(null);
 
   useEffect(() => {
     if (productId) {
@@ -49,6 +51,60 @@ export default function ProductEdit() {
   useEffect(() => {
     console.log('selectedValues state changed:', selectedValues);
   }, [selectedValues]);
+
+  // Track changes and warn user on navigation
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  // Detect changes in variants, selectedAttributes, selectedValues, or recommendations
+  useEffect(() => {
+    if (!initialState) return;
+
+    const currentState = {
+      variants: JSON.stringify(variants),
+      selectedAttributes: JSON.stringify(selectedAttributes),
+      selectedValues: JSON.stringify(selectedValues),
+      selectedRecommendations: JSON.stringify(selectedRecommendations),
+      isRing: isRing,
+      ringSizes: JSON.stringify(ringSizes)
+    };
+
+    const hasChanges =
+      currentState.variants !== initialState.variants ||
+      currentState.selectedAttributes !== initialState.selectedAttributes ||
+      currentState.selectedValues !== initialState.selectedValues ||
+      currentState.selectedRecommendations !== initialState.selectedRecommendations ||
+      currentState.isRing !== initialState.isRing ||
+      currentState.ringSizes !== initialState.ringSizes;
+
+    setHasUnsavedChanges(hasChanges);
+  }, [variants, selectedAttributes, selectedValues, selectedRecommendations, isRing, ringSizes, initialState]);
+
+  // Helper function to reset unsaved changes after successful save
+  const resetUnsavedChanges = () => {
+    setInitialState({
+      variants: JSON.stringify(variants),
+      selectedAttributes: JSON.stringify(selectedAttributes),
+      selectedValues: JSON.stringify(selectedValues),
+      selectedRecommendations: JSON.stringify(selectedRecommendations),
+      isRing: isRing,
+      ringSizes: JSON.stringify(ringSizes)
+    });
+    setHasUnsavedChanges(false);
+  };
 
   const fetchData = async () => {
     try {
@@ -178,6 +234,18 @@ export default function ProductEdit() {
       }
 
       setLoading(false);
+
+      // Set initial state snapshot after data is loaded
+      setTimeout(() => {
+        setInitialState({
+          variants: JSON.stringify(variantsData || []),
+          selectedAttributes: JSON.stringify(selectedAttributes),
+          selectedValues: JSON.stringify(selectedValues),
+          selectedRecommendations: JSON.stringify(selectedRecommendations),
+          isRing: isRing,
+          ringSizes: JSON.stringify(ringSizes)
+        });
+      }, 100);
     } catch (error) {
       console.error('Error fetching data:', error);
       setLoading(false);
@@ -317,6 +385,7 @@ export default function ProductEdit() {
         setManualVariant({});
         await fetchVariants();
         setTimeout(() => setMessage(null), 3000);
+        resetUnsavedChanges();
       } else {
         setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
         setTimeout(() => setMessage(null), 5000);
@@ -391,6 +460,7 @@ export default function ProductEdit() {
         setShowGenerateModal(false);
         await fetchVariants();
         setTimeout(() => setMessage(null), 3000);
+        resetUnsavedChanges();
       } else {
         setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
         setTimeout(() => setMessage(null), 5000);
@@ -440,6 +510,7 @@ export default function ProductEdit() {
         if (res.ok) {
           setMessage({ type: 'success', text: 'Variants updated successfully!' });
           await fetchVariants();
+          resetUnsavedChanges();
         }
       }
 
@@ -661,6 +732,7 @@ export default function ProductEdit() {
       if (res.ok) {
         setMessage({ type: 'success', text: 'Recommendations saved successfully!' });
         setTimeout(() => setMessage(null), 3000);
+        resetUnsavedChanges();
       } else {
         setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
         setTimeout(() => setMessage(null), 5000);
@@ -705,10 +777,31 @@ export default function ProductEdit() {
             <Link
               href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
               className={styles.backLink}
+              onClick={(e) => {
+                if (hasUnsavedChanges) {
+                  if (!confirm('You have unsaved changes. Are you sure you want to leave this page?')) {
+                    e.preventDefault();
+                  }
+                }
+              }}
             >
               ← Back to Products
             </Link>
-            <h1>{product.title}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h1>{product.title}</h1>
+              {hasUnsavedChanges && (
+                <span style={{
+                  padding: '4px 12px',
+                  background: '#ff9800',
+                  color: 'white',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>
+                  Unsaved Changes
+                </span>
+              )}
+            </div>
 
             {/* Is Ring Checkbox */}
             <div style={{ marginTop: '1rem' }}>

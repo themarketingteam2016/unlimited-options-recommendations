@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabaseAdmin } from '../../lib/supabase';
 import { fetchShopifyProductsREST } from '../../lib/shopify-client';
+import Sidebar from '../../components/Sidebar';
+import Toast from '../../components/Toast';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import useToast from '../../hooks/useToast';
 
 export default function RecommendationsPage() {
   const [products, setProducts] = useState([]);
@@ -8,7 +12,8 @@ export default function RecommendationsPage() {
   const [selectedRecommendation, setSelectedRecommendation] = useState('');
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
+  const { toast, showSuccess, showError, hideToast } = useToast();
 
   useEffect(() => {
     loadProducts();
@@ -22,14 +27,13 @@ export default function RecommendationsPage() {
 
   async function loadProducts() {
     try {
-      setLoading(true);
       const shopifyProducts = await fetchShopifyProductsREST();
       setProducts(shopifyProducts);
     } catch (error) {
       console.error('Error loading products:', error);
-      setMessage('Error loading products');
+      showError('Error loading products');
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   }
 
@@ -47,12 +51,12 @@ export default function RecommendationsPage() {
     e.preventDefault();
 
     if (!selectedProduct || !selectedRecommendation) {
-      setMessage('Please select both product and recommendation');
+      showError('Please select both product and recommendation');
       return;
     }
 
     if (selectedProduct === selectedRecommendation) {
-      setMessage('Cannot recommend the same product');
+      showError('Cannot recommend the same product');
       return;
     }
 
@@ -69,16 +73,16 @@ export default function RecommendationsPage() {
       });
 
       if (res.ok) {
-        setMessage('Recommendation added successfully!');
+        showSuccess('Recommendation added successfully!');
         setSelectedRecommendation('');
         loadRecommendations(selectedProduct);
       } else {
         const error = await res.json();
-        setMessage(`Error: ${error.error}`);
+        showError(`Error: ${error.error}`);
       }
     } catch (error) {
       console.error('Error adding recommendation:', error);
-      setMessage('Error adding recommendation');
+      showError('Error adding recommendation');
     } finally {
       setLoading(false);
     }
@@ -88,31 +92,47 @@ export default function RecommendationsPage() {
     if (!confirm('Delete this recommendation?')) return;
 
     try {
-      // Add delete endpoint later
-      setMessage('Delete functionality coming soon');
+      setLoading(true);
+      const res = await fetch('/api/recommendations/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: recId })
+      });
+
+      if (res.ok) {
+        showSuccess('Recommendation deleted successfully!');
+        loadRecommendations(selectedProduct);
+      } else {
+        const error = await res.json();
+        showError(`Error: ${error.error}`);
+      }
     } catch (error) {
       console.error('Error deleting:', error);
+      showError('Error deleting recommendation');
+    } finally {
+      setLoading(false);
     }
   }
 
-  return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
-      <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '32px' }}>
-        Product Recommendations
-      </h1>
-
-      {message && (
-        <div style={{
-          padding: '12px 16px',
-          marginBottom: '24px',
-          borderRadius: '8px',
-          background: message.includes('Error') ? '#fee' : '#efe',
-          color: message.includes('Error') ? '#c00' : '#060',
-          border: `1px solid ${message.includes('Error') ? '#fcc' : '#cfc'}`
-        }}>
-          {message}
+  if (initialLoading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <Sidebar />
+        <div style={{ flex: 1, maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+          <LoadingSpinner size="large" text="Loading products..." />
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      <div style={{ flex: 1, maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: '700', marginBottom: '32px' }}>
+          Product Recommendations
+        </h1>
 
       <div style={{ marginBottom: '40px' }}>
         <form onSubmit={addRecommendation}>
@@ -263,6 +283,7 @@ export default function RecommendationsPage() {
           No recommendations yet. Add some above!
         </div>
       )}
+      </div>
     </div>
   );
 }

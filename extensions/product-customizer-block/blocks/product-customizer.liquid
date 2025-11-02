@@ -22,9 +22,10 @@ let recommendations = [];
 let selectedRecommendations = new Set();
 let recommendationVariantsCache = {};
 let productDataCache = {};
-let recommendationUserSelections = {}; 
-let ringSize = ''; 
-let isRingProduct = false; 
+let recommendationUserSelections = {};
+let recommendationRingSizes = {};
+let ringSize = '';
+let isRingProduct = false;
 let availableRingSizes = []; 
 async function loadCustomizer() {
 try {
@@ -109,24 +110,41 @@ shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
 } catch (e) {
 }
 }
+let isRing = false;
+let ringSizes = null;
+try {
+const ringInfoRes = await fetch(`${APP_URL}/api/storefront/product-info?productId=${encodeURIComponent(shopifyProductId)}`);
+if (ringInfoRes.ok) {
+const ringData = await ringInfoRes.json();
+isRing = ringData?.is_ring || false;
+ringSizes = ringData?.ring_sizes || null;
+}
+} catch (e) {
+}
 recommendationVariantsCache[internalProductId] = {
 variants: variants || [],
 shopifyProductId: shopifyProductId,
-shopifyFallbackVariantId: shopifyFallbackVariantId
+shopifyFallbackVariantId: shopifyFallbackVariantId,
+isRing: isRing,
+ringSizes: ringSizes
 };
 updateRecommendationPrice(internalProductId, variants);
 } else {
 recommendationVariantsCache[internalProductId] = {
 variants: [],
 shopifyProductId: shopifyProductId,
-shopifyFallbackVariantId: null
+shopifyFallbackVariantId: null,
+isRing: false,
+ringSizes: null
 };
 }
 } catch (error) {
 recommendationVariantsCache[internalProductId] = {
 variants: [],
 shopifyProductId: shopifyProductId,
-shopifyFallbackVariantId: null
+shopifyFallbackVariantId: null,
+isRing: false,
+ringSizes: null
 };
 }
 }
@@ -265,6 +283,7 @@ if (this.checked) {
 selectedRecommendations.add(productId);
 } else {
 selectedRecommendations.delete(productId);
+delete recommendationRingSizes[productId];
 }
 updateVariant();
 updateRecommendationPreview();
@@ -384,25 +403,52 @@ ${value.id === selectedValue && matchedDetail?.matchType === 'nearest' ? ' ~' : 
 </div>
 `;
 }).join('');
+const selectedRingSize = recommendationRingSizes[productId] || '';
+const ringSizeSelectHTML = cachedData?.isRing ? `
+<div class="unlimited-rec-option">
+<label class="unlimited-rec-option__label">Ring Size:</label>
+<select
+class="unlimited-rec-option__select unlimited-rec-ring-size"
+data-product-id="${productId}"
+>
+<option value="">Select Ring Size</option>
+${(cachedData?.ringSizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12]).map(size => `
+<option value="${size}" ${size == selectedRingSize ? 'selected' : ''}>${size}</option>
+`).join('')}
+</select>
+</div>
+` : '';
 const matchedVariant = recVariants.find(variant => {
 return variant.variant_options?.every(opt =>
 preFilledSelections[opt.attribute.id] === opt.attribute_value.id
 );
 });
+const isRingProduct = cachedData?.isRing || false;
+const hasRingSize = recommendationRingSizes[productId];
+const isValid = matchedVariant && (!isRingProduct || hasRingSize);
 const variantPrice = matchedVariant?.price ? `$${matchedVariant.price}` : '';
 const priceDisplay = matchedVariant
 ? `<div class="unlimited-bundle-price">Price: <strong>${variantPrice}</strong></div>`
 : '<div class="unlimited-bundle-price unlimited-bundle-price--error">Select valid combination to see price</div>';
+let validationMessage = '';
+if (!matchedVariant) {
+validationMessage = '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>';
+} else if (isRingProduct && !hasRingSize) {
+validationMessage = '<div class="unlimited-warning-text">⚠️ Select ring size</div>';
+} else {
+validationMessage = '<div class="unlimited-success-text">✓ Valid selection</div>';
+}
 previewHTML += `
-<div class="unlimited-bundle-preview__item ${matchedVariant ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
+<div class="unlimited-bundle-preview__item ${isValid ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
 <div class="unlimited-bundle-item-header">
 <strong>${productName}</strong>
 <span class="unlimited-edit-badge">✏️ Editable</span>
 </div>
-${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : '<div class="unlimited-success-text">✓ Valid selection</div>'}
+${validationMessage}
 ${priceDisplay}
 <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
 ${optionSelectorsHTML}
+${ringSizeSelectHTML}
 </div>
 </div>
 `;
@@ -422,7 +468,7 @@ previewHTML += `
 `;
 preview.innerHTML = previewHTML;
 preview.style.display = 'block';
-const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select');
+const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select:not(.unlimited-rec-ring-size)');
 recOptionSelects.forEach(select => {
 select.addEventListener('change', function() {
 const productId = this.dataset.productId;
@@ -433,6 +479,16 @@ recommendationUserSelections[productId] = {};
 }
 recommendationUserSelections[productId][attributeId] = valueId;
 updateRecommendationPreview();
+});
+});
+const recRingSizeSelects = preview.querySelectorAll('.unlimited-rec-ring-size');
+recRingSizeSelects.forEach(select => {
+select.addEventListener('change', function() {
+const productId = this.dataset.productId;
+const ringSize = this.value;
+recommendationRingSizes[productId] = ringSize;
+updateRecommendationPreview();
+updateVariant();
 });
 });
 }
@@ -531,6 +587,27 @@ addToCartBtn.disabled = true;
 addToCartBtn.textContent = 'Select Ring Size';
 }
 } else {
+let bundleRingSizeValid = true;
+let missingRingSizeProduct = null;
+if (selectedRecommendations.size > 0) {
+for (const productId of selectedRecommendations) {
+const cachedData = recommendationVariantsCache[productId];
+if (cachedData?.isRing && !recommendationRingSizes[productId]) {
+bundleRingSizeValid = false;
+const recData = recommendations.find(r => r.recommended_product?.id === productId);
+missingRingSizeProduct = recData?.recommended_product?.title || 'bundled product';
+break;
+}
+}
+}
+if (!bundleRingSizeValid) {
+buyNowBtn.disabled = true;
+buyNowBtn.textContent = 'Select Ring Size for Bundle';
+if (addToCartBtn) {
+addToCartBtn.disabled = true;
+addToCartBtn.textContent = 'Select Ring Size for Bundle';
+}
+} else {
 buyNowBtn.disabled = false;
 if (selectedRecommendations.size > 0) {
 buyNowBtn.textContent = 'Buy Bundle Now';
@@ -540,6 +617,7 @@ buyNowBtn.textContent = 'Buy Now';
 if (addToCartBtn) {
 addToCartBtn.disabled = false;
 addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
+}
 }
 }
 } else {
@@ -744,12 +822,14 @@ preFilledSelections[opt.attribute.id] === opt.attribute_value.id
 });
 if (matchedVariant) {
 try {
+const recRingSize = recommendationRingSizes[productId] || null;
 const recApiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
 variantId: matchedVariant.id,
-quantity: 1
+quantity: 1,
+ringSize: recRingSize
 })
 });
 if (recApiResponse.ok) {
@@ -757,19 +837,29 @@ const recApiData = await recApiResponse.json();
 if (recApiData.fallback && recApiData.variant) {
 const shopifyFallbackVariantId = cachedData?.shopifyFallbackVariantId;
 if (shopifyFallbackVariantId) {
+const properties = recApiData.variant.properties || {};
+if (recRingSize) {
+properties['Ring Size'] = recRingSize;
+}
 itemsToAdd.push({
 id: shopifyFallbackVariantId,
 quantity: 1,
-properties: recApiData.variant.properties || {}
+properties: properties
 });
 } else {
 recommendationErrors.push(`No fallback variant for product ${productId}`);
 }
 } else if (recApiData.success && recApiData.shopifyVariantId) {
-itemsToAdd.push({
+const itemToAdd = {
 id: recApiData.shopifyVariantId,
 quantity: 1
-});
+};
+if (recRingSize) {
+itemToAdd.properties = {
+'Ring Size': recRingSize
+};
+}
+itemsToAdd.push(itemToAdd);
 }
 } else {
 recommendationErrors.push(`API error for product ${productId}`);
@@ -805,6 +895,7 @@ throw new Error(cartData.description || cartData.message || 'Failed to add to ca
 }
 addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
 selectedRecommendations.clear();
+recommendationRingSizes = {};
 const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
 checkboxes.forEach(cb => cb.checked = false);
 const bundlePreview = container.querySelector('.unlimited-bundle-preview');
@@ -901,9 +992,11 @@ preFilledSelections[opt.attribute.id] === opt.attribute_value.id
 );
 });
 if (matchedVariant) {
+const recRingSize = recommendationRingSizes[productId] || null;
 itemsToProcess.push({
 variantId: matchedVariant.id,
-quantity: 1
+quantity: 1,
+ringSize: recRingSize
 });
 }
 }
@@ -923,6 +1016,7 @@ if (!data.success || !data.checkoutUrl) {
 throw new Error('No checkout URL returned');
 }
 selectedRecommendations.clear();
+recommendationRingSizes = {};
 const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
 checkboxes.forEach(cb => cb.checked = false);
 const bundlePreview = container.querySelector('.unlimited-bundle-preview');

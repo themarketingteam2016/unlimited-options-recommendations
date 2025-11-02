@@ -220,7 +220,13 @@ async function createCheckoutHandler(req, res) {
           originalUnitPrice: item.price,
           quantity: item.quantity,
           taxable: item.taxable,
-          customAttributes: item.customAttributes
+          customAttributes: [
+            ...item.customAttributes,
+            ...item.properties.map(prop => ({
+              key: prop.name,
+              value: prop.value.toString()
+            }))
+          ]
         })),
         note: 'Order created via Unlimited Options & Recommendations app',
         useCustomerDefaultAddress: true

@@ -32,16 +32,34 @@ export default function Sidebar() {
       <h2>Menu</h2>
       <nav>
         <Link
-          href={buildUrl('/')}
-          className={`${styles.navLink} ${isActive('/') && !isActive('/attributes') ? styles.active : ''}`}
+          href={buildUrl('/dashboard')}
+          className={`${styles.navLink} ${isActive('/dashboard') ? styles.active : ''}`}
         >
-          <span>Products</span>
+          <span>📊 Dashboard</span>
+        </Link>
+        <Link
+          href={buildUrl('/')}
+          className={`${styles.navLink} ${isActive('/') && !isActive('/attributes') && !isActive('/dashboard') && !isActive('/admin') ? styles.active : ''}`}
+        >
+          <span>📦 Products</span>
         </Link>
         <Link
           href={buildUrl('/attributes')}
           className={`${styles.navLink} ${isActive('/attributes') ? styles.active : ''}`}
         >
-          <span>Attributes</span>
+          <span>🏷️ Attributes</span>
+        </Link>
+        <Link
+          href={buildUrl('/admin/recommendations')}
+          className={`${styles.navLink} ${isActive('/admin/recommendations') ? styles.active : ''}`}
+        >
+          <span>🔗 Recommendations</span>
+        </Link>
+        <Link
+          href={buildUrl('/admin/sync-variants')}
+          className={`${styles.navLink} ${isActive('/admin/sync-variants') ? styles.active : ''}`}
+        >
+          <span>🔄 Sync Variants</span>
         </Link>
       </nav>
     </div>

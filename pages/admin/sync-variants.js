@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Sidebar from '../../components/Sidebar';
 
 // List of main products
 const MAIN_PRODUCTS = [
@@ -122,9 +123,11 @@ export default function SyncVariants() {
   };
 
   return (
-    <div style={{ padding: '40px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>Sync Variants to Shopify</h1>
-      <p>This will sync all custom variants from the database to Shopify.</p>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+        <h1>Sync Variants to Shopify</h1>
+        <p>This will sync all custom variants from the database to Shopify.</p>
 
       <div style={{ marginTop: '24px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
@@ -339,6 +342,7 @@ export default function SyncVariants() {
             </li>
           ))}
         </ul>
+      </div>
       </div>
     </div>
   );

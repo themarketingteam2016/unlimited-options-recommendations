@@ -17,6 +17,9 @@ export default function Home() {
   const [newOption, setNewOption] = useState({ name: '', value: '' });
   const [shop, setShop] = useState(null);
   const [isEmbedded, setIsEmbedded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const productsPerPage = 12;
 
   useEffect(() => {
     // Check if we're in an iframe (embedded app)
@@ -192,6 +195,21 @@ export default function Home() {
     }
   };
 
+  // Filter and paginate products
+  const filteredProducts = products.filter(product =>
+    product.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const endIndex = startIndex + productsPerPage;
+  const currentProducts = filteredProducts.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   // For custom apps, shop parameter comes from query string
   if (!shop) {
     // Show different message based on router state
@@ -239,32 +257,121 @@ export default function Home() {
 
         {!selectedProduct ? (
           <>
-            <h2>Select a Product</h2>
+            <div className={styles.header}>
+              <h2>Select a Product</h2>
+              {products.length > 0 && (
+                <div style={{ marginTop: '16px', marginBottom: '24px' }}>
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: '100%',
+                      maxWidth: '400px',
+                      padding: '12px 16px',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none'
+                    }}
+                  />
+                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
+                    Showing {currentProducts.length} of {filteredProducts.length} products
+                    {searchTerm && ` (filtered from ${products.length} total)`}
+                  </p>
+                </div>
+              )}
+            </div>
             {products.length === 0 ? (
               <div className={styles.emptyState}>
                 <p>No products found. Make sure your Shopify store has products.</p>
               </div>
-            ) : (
-              <div className={styles.productGrid}>
-                {products.map(product => (
-                  <div
-                    key={product.id}
-                    className={styles.productCard}
-                  >
-                    {product.featuredImage && (
-                      <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
-                    )}
-                    <h3>{product.title}</h3>
-                    <p className={styles.productStatus}>{product.status}</p>
-                    <Link
-                      href={`/products/edit?productId=${encodeURIComponent(product.id)}&shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`}
-                      className={styles.editButton}
-                    >
-                      Edit Variants
-                    </Link>
-                  </div>
-                ))}
+            ) : filteredProducts.length === 0 ? (
+              <div className={styles.emptyState}>
+                <p>No products match your search.</p>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className={styles.btnSecondary}
+                  style={{ marginTop: '16px' }}
+                >
+                  Clear Search
+                </button>
               </div>
+            ) : (
+              <>
+                <div className={styles.productGrid}>
+                  {currentProducts.map(product => (
+                    <div
+                      key={product.id}
+                      className={styles.productCard}
+                    >
+                      {product.featuredImage && (
+                        <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
+                      )}
+                      <h3>{product.title}</h3>
+                      <p className={styles.productStatus}>{product.status}</p>
+                      <Link
+                        href={`/products/edit?productId=${encodeURIComponent(product.id)}&shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`}
+                        className={styles.editButton}
+                      >
+                        Edit Variants
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginTop: '32px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={styles.btnSecondary}
+                      style={{
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      ← Previous
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={currentPage === pageNum ? styles.btnPrimary : styles.btnSecondary}
+                          style={{
+                            minWidth: '40px',
+                            padding: '8px 12px'
+                          }}
+                        >
+                          {pageNum}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={styles.btnSecondary}
+                      style={{
+                        opacity: currentPage === totalPages ? 0.5 : 1,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : (
