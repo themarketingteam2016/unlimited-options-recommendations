@@ -230,6 +230,7 @@ const ringSizeSelect = container.querySelector('#ring-size-select');
 if (ringSizeSelect) {
 ringSizeSelect.addEventListener('change', function() {
 ringSize = this.value;
+updateVariant();
 });
 }
 const selects = container.querySelectorAll('.unlimited-option__select');
@@ -535,6 +536,14 @@ if (selectedVariant.sku) {
 skuEl.innerHTML = `<strong>SKU:</strong> ${selectedVariant.sku}`;
 skuEl.style.display = 'block';
 }
+if (isRingProduct && !ringSize) {
+buyNowBtn.disabled = true;
+buyNowBtn.textContent = 'Select Ring Size';
+if (addToCartBtn) {
+addToCartBtn.disabled = true;
+addToCartBtn.textContent = 'Select Ring Size';
+}
+} else {
 buyNowBtn.disabled = false;
 if (selectedRecommendations.size > 0) {
 buyNowBtn.textContent = 'Buy Bundle Now';
@@ -544,6 +553,7 @@ buyNowBtn.textContent = 'Buy Now';
 if (addToCartBtn) {
 addToCartBtn.disabled = false;
 addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
+}
 }
 } else {
 variantInfo.style.display = 'none';
