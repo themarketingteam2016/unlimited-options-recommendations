@@ -107,7 +107,9 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <LoadingSpinner size="large" text="Loading dashboard..." />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LoadingSpinner size="large" text="Loading dashboard..." />
+          </div>
         ) : (
           <>
             <div className={styles.statsGrid}>

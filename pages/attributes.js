@@ -179,7 +179,9 @@ export default function Attributes() {
       <div className={styles.container}>
         <Sidebar />
         <div className={styles.main}>
-          <LoadingSpinner size="large" text="Loading attributes..." />
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LoadingSpinner size="large" text="Loading attributes..." />
+          </div>
         </div>
       </div>
     );

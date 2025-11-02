@@ -118,7 +118,7 @@ export default function RecommendationsPage() {
     return (
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         <Sidebar />
-        <div style={{ flex: 1, maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <LoadingSpinner size="large" text="Loading products..." />
         </div>
       </div>

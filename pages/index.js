@@ -237,9 +237,11 @@ export default function Home() {
     return (
       <div className={styles.container}>
         <Sidebar />
-        <div className={styles.main}>
-          <LoadingSpinner size="large" text="Loading products..." />
-        </div>
+        <main className={styles.main}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LoadingSpinner size="large" text="Loading products..." />
+          </div>
+        </main>
       </div>
     );
   }
