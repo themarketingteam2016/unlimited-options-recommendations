@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import Sidebar from '../../components/Sidebar';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import styles from '../../styles/ProductEdit.module.css';
 
 export default function ProductEdit() {
@@ -746,18 +747,10 @@ export default function ProductEdit() {
     }
   };
 
-  if (loading) {
-    return <div className={styles.loading}>Loading...</div>;
-  }
-
-  if (!product) {
-    return <div className={styles.loading}>Product not found</div>;
-  }
-
   return (
     <div className={styles.container}>
       <Head>
-        <title>Edit Product - {product.title}</title>
+        <title>Edit Product{product ? ` - ${product.title}` : ''}</title>
       </Head>
 
       <Sidebar />
@@ -772,23 +765,58 @@ export default function ProductEdit() {
       )}
 
       <main className={styles.main}>
-        <div className={styles.header}>
-          <div>
-            <Link
-              href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
-              className={styles.backLink}
-              onClick={(e) => {
-                if (hasUnsavedChanges) {
-                  if (!confirm('You have unsaved changes. Are you sure you want to leave this page?')) {
-                    e.preventDefault();
-                  }
-                }
-              }}
-            >
-              ← Back to Products
-            </Link>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h1>{product.title}</h1>
+        {loading ? (
+          <>
+            <div className={styles.header}>
+              <div>
+                <Link
+                  href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
+                  className={styles.backLink}
+                >
+                  ← Back to Products
+                </Link>
+                <h1>Loading Product...</h1>
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+              <LoadingSpinner size="large" text="Loading product details..." />
+            </div>
+          </>
+        ) : !product ? (
+          <>
+            <div className={styles.header}>
+              <h1>Product Not Found</h1>
+            </div>
+            <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+              <p>The product you're looking for could not be found.</p>
+              <Link
+                href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
+                className={styles.backLink}
+                style={{ display: 'inline-block', marginTop: '20px' }}
+              >
+                ← Back to Products
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.header}>
+              <div>
+                <Link
+                  href={`/?shop=${router.query.shop || ''}${router.query.host ? `&host=${router.query.host}` : ''}`}
+                  className={styles.backLink}
+                  onClick={(e) => {
+                    if (hasUnsavedChanges) {
+                      if (!confirm('You have unsaved changes. Are you sure you want to leave this page?')) {
+                        e.preventDefault();
+                      }
+                    }
+                  }}
+                >
+                  ← Back to Products
+                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <h1>{product.title}</h1>
               {hasUnsavedChanges && (
                 <span style={{
                   padding: '4px 12px',
@@ -1368,6 +1396,8 @@ export default function ProductEdit() {
         </div>
         </div>
         {/* End Product Recommendations Tab */}
+        </>
+        )}
       </main>
     </div>
   );
