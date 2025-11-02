@@ -11,6 +11,7 @@ export default function ProductEdit() {
 
   const [product, setProduct] = useState(null);
   const [isRing, setIsRing] = useState(false);
+  const [ringSizes, setRingSizes] = useState([]);
   const [attributes, setAttributes] = useState([]);
   const [selectedAttributes, setSelectedAttributes] = useState({});
   const [selectedValues, setSelectedValues] = useState({});
@@ -83,6 +84,10 @@ export default function ProductEdit() {
       const foundProduct = productsData.find(p => p.id === productId);
       setProduct(foundProduct);
       setIsRing(foundProduct?.is_ring || false);
+
+      // Set ring sizes from database or use defaults
+      const defaultRingSizes = [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
+      setRingSizes(foundProduct?.ring_sizes || defaultRingSizes);
 
       // Fetch existing recommendations using query params
       const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
@@ -769,13 +774,52 @@ export default function ProductEdit() {
               <p style={{ fontSize: '14px', color: '#6d7175', marginBottom: '1rem' }}>
                 This field will be collected from customers but does not affect pricing or product variations.
               </p>
-              <div style={{ maxWidth: '300px' }}>
+              <div style={{ maxWidth: '600px' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
                   Available Ring Sizes
                 </label>
-                <div style={{ color: '#6d7175', fontSize: '14px', padding: '0.75rem', background: 'white', border: '1px solid #d1d1d1', borderRadius: '4px' }}>
-                  4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12
-                </div>
+                <textarea
+                  value={ringSizes.join(', ')}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Parse the comma-separated values
+                    const sizes = value.split(',').map(s => {
+                      const trimmed = s.trim();
+                      const parsed = parseFloat(trimmed);
+                      return isNaN(parsed) ? null : parsed;
+                    }).filter(s => s !== null);
+                    setRingSizes(sizes);
+                  }}
+                  onBlur={async () => {
+                    // Save to database
+                    try {
+                      await fetch(`/api/products/${encodeURIComponent(productId)}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ring_sizes: ringSizes })
+                      });
+                      setMessage({ type: 'success', text: 'Ring sizes saved successfully' });
+                      setTimeout(() => setMessage(null), 3000);
+                    } catch (error) {
+                      setMessage({ type: 'error', text: 'Failed to save ring sizes' });
+                      setTimeout(() => setMessage(null), 3000);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    minHeight: '80px',
+                    padding: '0.75rem',
+                    fontSize: '14px',
+                    border: '1px solid #d1d1d1',
+                    borderRadius: '4px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                  placeholder="Enter ring sizes separated by commas (e.g., 4, 4.25, 4.5, 5, ...)"
+                />
+                <p style={{ fontSize: '13px', color: '#6d7175', marginTop: '0.5rem' }}>
+                  Enter ring sizes separated by commas. Values will be sorted automatically.
+                </p>
                 <p style={{ fontSize: '13px', color: '#6d7175', marginTop: '0.5rem', fontStyle: 'italic' }}>
                   Ring size will be collected at checkout and stored with the order.
                 </p>

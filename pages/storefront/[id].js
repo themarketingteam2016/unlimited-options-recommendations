@@ -198,7 +198,7 @@ export default function Storefront() {
                     onChange={(e) => setRingSize(e.target.value)}
                   >
                     <option value="">Select Ring Size</option>
-                    {[4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12].map(size => (
+                    {(product.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12]).map(size => (
                       <option key={size} value={size}>{size}</option>
                     ))}
                   </select>

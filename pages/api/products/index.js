@@ -56,10 +56,10 @@ async function productsHandler(req, res) {
           });
       }
 
-      // Fetch additional data from Supabase (like is_ring)
+      // Fetch additional data from Supabase (like is_ring, ring_sizes)
       const { data: supabaseProducts, error: supabaseError } = await supabaseAdmin
         .from('products')
-        .select('id, shopify_product_id, is_ring');
+        .select('id, shopify_product_id, is_ring, ring_sizes');
 
       if (supabaseError) {
         console.error('Error fetching from Supabase:', supabaseError);
@@ -73,7 +73,8 @@ async function productsHandler(req, res) {
         return {
           ...shopifyProduct,
           id: supabaseProduct?.id || shopifyProduct.id,
-          is_ring: supabaseProduct?.is_ring || false
+          is_ring: supabaseProduct?.is_ring || false,
+          ring_sizes: supabaseProduct?.ring_sizes || null
         };
       });
 
