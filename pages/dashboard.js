@@ -120,20 +120,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Total Variants */}
-              <div className={styles.statCard}>
-                <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                  🎯
-                </div>
-                <div className={styles.statContent}>
-                  <h3 className={styles.statLabel}>Custom Variants</h3>
-                  <p className={styles.statValue}>{stats?.totalVariants || 0}</p>
-                  <p className={styles.statSubtext}>
-                    {stats?.activeVariants || 0} active
-                  </p>
-                </div>
-              </div>
-
               {/* Total Attributes */}
               <div className={styles.statCard}>
                 <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
@@ -146,66 +132,6 @@ export default function Dashboard() {
                     Product options
                   </p>
                 </div>
-              </div>
-
-              {/* Average Variants */}
-              <div className={styles.statCard}>
-                <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
-                  📊
-                </div>
-                <div className={styles.statContent}>
-                  <h3 className={styles.statLabel}>Avg Variants</h3>
-                  <p className={styles.statValue}>
-                    {stats?.totalProducts > 0
-                      ? Math.round(stats.totalVariants / stats.totalProducts)
-                      : 0}
-                  </p>
-                  <p className={styles.statSubtext}>
-                    Per product
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className={styles.quickActions}>
-              <h2 className={styles.sectionTitle}>Quick Actions</h2>
-              <div className={styles.actionsGrid}>
-                <button
-                  className={styles.actionCard}
-                  onClick={() => router.push(`/?shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`)}
-                >
-                  <span className={styles.actionIcon}>➕</span>
-                  <h3>Add Product Variants</h3>
-                  <p>Create custom product options</p>
-                </button>
-
-                <button
-                  className={styles.actionCard}
-                  onClick={() => router.push(`/attributes?shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`)}
-                >
-                  <span className={styles.actionIcon}>🏷️</span>
-                  <h3>Manage Attributes</h3>
-                  <p>Configure product attributes</p>
-                </button>
-
-                <button
-                  className={styles.actionCard}
-                  onClick={() => router.push(`/admin/sync-variants?shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`)}
-                >
-                  <span className={styles.actionIcon}>🔄</span>
-                  <h3>Sync to Shopify</h3>
-                  <p>Push variants to your store</p>
-                </button>
-
-                <button
-                  className={styles.actionCard}
-                  onClick={() => router.push(`/admin/recommendations?shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`)}
-                >
-                  <span className={styles.actionIcon}>🔗</span>
-                  <h3>Product Recommendations</h3>
-                  <p>Set up cross-sells</p>
-                </button>
               </div>
             </div>
           </>
