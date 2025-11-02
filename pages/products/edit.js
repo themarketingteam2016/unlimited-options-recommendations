@@ -92,10 +92,9 @@ export default function ProductEdit() {
       // Fetch existing recommendations using query params
       const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
       const recsData = await recsRes.json();
-      console.log('Fetched recommendations:', recsData);
-      const recommendationIds = Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : [];
-      console.log('Selected recommendation IDs:', recommendationIds);
-      setSelectedRecommendations(recommendationIds);
+      setSelectedRecommendations(
+        Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
+      );
 
       // Fetch variants
       const variantsData = await fetchVariants();
@@ -469,15 +468,11 @@ export default function ProductEdit() {
   };
 
   const handleRecommendationToggle = (prodId) => {
-    console.log('Toggle called with:', prodId);
-    setSelectedRecommendations(prev => {
-      console.log('Previous selectedRecommendations:', prev);
-      const newValue = prev.includes(prodId)
+    setSelectedRecommendations(prev =>
+      prev.includes(prodId)
         ? prev.filter(p => p !== prodId)
-        : [...prev, prodId].slice(0, 2); // Max 2 recommendations
-      console.log('New selectedRecommendations:', newValue);
-      return newValue;
-    });
+        : [...prev, prodId].slice(0, 2) // Max 2 recommendations
+    );
   };
 
   const handleImageUpload = async (e) => {
@@ -1244,37 +1239,21 @@ export default function ProductEdit() {
           <p className={styles.subtitle}>Select up to 2 products to recommend with this product</p>
 
           <div className={styles.recommendationsGrid}>
-            {allProducts.filter(p => p.id !== productId).map(prod => {
-              const prodIdToUse = prod.shopify_product_id || prod.id;
-              const isSelected = selectedRecommendations.includes(prodIdToUse);
-
-              console.log('Product:', prod.title, {
-                id: prod.id,
-                shopify_product_id: prod.shopify_product_id,
-                usingId: prodIdToUse,
-                isSelected: isSelected,
-                selectedRecommendations: selectedRecommendations
-              });
-
-              return (
-                <div
-                  key={prod.id}
-                  className={`${styles.recommendationCard} ${isSelected ? styles.selected : ''}`}
-                  onClick={() => {
-                    console.log('Clicking product:', prod.title, 'with ID:', prodIdToUse);
-                    handleRecommendationToggle(prodIdToUse);
-                  }}
-                >
-                  {prod.featuredImage && (
-                    <img src={prod.featuredImage.url} alt={prod.title} className={styles.recImage} />
-                  )}
-                  <h4>{prod.title}</h4>
-                  {isSelected && (
-                    <span className={styles.selectedBadge}>Selected</span>
-                  )}
-                </div>
-              );
-            })}
+            {allProducts.filter(p => p.id !== productId).map(prod => (
+              <div
+                key={prod.id}
+                className={`${styles.recommendationCard} ${selectedRecommendations.includes(prod.id) ? styles.selected : ''}`}
+                onClick={() => handleRecommendationToggle(prod.id)}
+              >
+                {prod.featuredImage && (
+                  <img src={prod.featuredImage.url} alt={prod.title} className={styles.recImage} />
+                )}
+                <h4>{prod.title}</h4>
+                {selectedRecommendations.includes(prod.id) && (
+                  <span className={styles.selectedBadge}>Selected</span>
+                )}
+              </div>
+            ))}
           </div>
 
           <button
