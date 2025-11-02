@@ -92,9 +92,10 @@ export default function ProductEdit() {
       // Fetch existing recommendations using query params
       const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
       const recsData = await recsRes.json();
-      setSelectedRecommendations(
-        Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
-      );
+      console.log('Fetched recommendations:', recsData);
+      const recommendationIds = Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : [];
+      console.log('Selected recommendation IDs:', recommendationIds);
+      setSelectedRecommendations(recommendationIds);
 
       // Fetch variants
       const variantsData = await fetchVariants();
@@ -1242,14 +1243,14 @@ export default function ProductEdit() {
             {allProducts.filter(p => p.id !== productId).map(prod => (
               <div
                 key={prod.id}
-                className={`${styles.recommendationCard} ${selectedRecommendations.includes(prod.id) ? styles.selected : ''}`}
-                onClick={() => handleRecommendationToggle(prod.id)}
+                className={`${styles.recommendationCard} ${selectedRecommendations.includes(prod.shopify_product_id || prod.id) ? styles.selected : ''}`}
+                onClick={() => handleRecommendationToggle(prod.shopify_product_id || prod.id)}
               >
                 {prod.featuredImage && (
                   <img src={prod.featuredImage.url} alt={prod.title} className={styles.recImage} />
                 )}
                 <h4>{prod.title}</h4>
-                {selectedRecommendations.includes(prod.id) && (
+                {selectedRecommendations.includes(prod.shopify_product_id || prod.id) && (
                   <span className={styles.selectedBadge}>Selected</span>
                 )}
               </div>
