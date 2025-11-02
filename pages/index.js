@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Sidebar from '../components/Sidebar';
+import LoadingSpinner from '../components/LoadingSpinner';
 import styles from '../styles/Home.module.css';
 
 export default function Home() {
@@ -232,7 +233,14 @@ export default function Home() {
   }
 
   if (loading) {
-    return <div className={styles.loading}>Loading products...</div>;
+    return (
+      <div className={styles.container}>
+        <Sidebar />
+        <div className={styles.main}>
+          <LoadingSpinner size="large" text="Loading products..." />
+        </div>
+      </div>
+    );
   }
 
   return (
