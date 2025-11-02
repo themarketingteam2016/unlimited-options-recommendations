@@ -20,7 +20,7 @@ export default function Home() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list'
   const productsPerPage = 12;
 
   useEffect(() => {
