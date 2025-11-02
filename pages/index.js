@@ -254,8 +254,8 @@ export default function Home() {
       <Sidebar />
 
       <main className={styles.main}>
-        <h1 className={styles.title}>Unlimited Product Options</h1>
-        <p className={styles.description}>Create unlimited variants beyond Shopify's 100 variant limit</p>
+        <h1 className={styles.title}>Products</h1>
+        <p className={styles.description}>Manage your product catalog and custom variants</p>
 
         {message && (
           <div className={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
