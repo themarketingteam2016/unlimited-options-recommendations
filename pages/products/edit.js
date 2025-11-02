@@ -686,22 +686,38 @@ export default function ProductEdit() {
 
       // Auto-save the image
       try {
-        const res = await fetch(`/api/attribute-images?productId=${encodeURIComponent(productId)}`, {
-          method: 'POST',
+        // Find the attribute value to get its current value
+        const attributeValue = attributes
+          .flatMap(attr => attr.attribute_values || [])
+          .find(val => val.id === attributeValueId);
+
+        if (!attributeValue) {
+          throw new Error('Attribute value not found');
+        }
+
+        const res = await fetch(`/api/attributes/values/${attributeValueId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            attributeValueId,
+            value: attributeValue.value,
             imageUrl: base64
           })
         });
 
         if (res.ok) {
-          setMessage({ type: 'success', text: 'Image uploaded!' });
+          setMessage({ type: 'success', text: 'Image uploaded successfully!' });
           setTimeout(() => setMessage(null), 2000);
+
+          // Refresh data to show updated image
+          await fetchData();
+        } else {
+          const error = await res.json();
+          throw new Error(error.error || 'Failed to upload image');
         }
       } catch (error) {
         console.error('Image upload error:', error);
-        setMessage({ type: 'error', text: 'Failed to upload image' });
+        setMessage({ type: 'error', text: error.message || 'Failed to upload image' });
+        setTimeout(() => setMessage(null), 3000);
       }
     };
     reader.readAsDataURL(file);
