@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState(null);
+  const [recentOrders, setRecentOrders] = useState([]);
 
   useEffect(() => {
     if (router.isReady) {
@@ -31,17 +32,19 @@ export default function Dashboard() {
       setLoading(true);
 
       // Fetch all data in parallel
-      const [productsRes, variantsRes, attributesRes, ordersRes] = await Promise.all([
+      const [productsRes, variantsRes, attributesRes, ordersRes, recentOrdersRes] = await Promise.all([
         fetch(`/api/products?shop=${shop}`),
         fetch('/api/variants'),
         fetch('/api/attributes'),
-        fetch('/api/orders/count')
+        fetch('/api/orders/count'),
+        fetch('/api/orders/recent?limit=5')
       ]);
 
       const products = await productsRes.json();
       const variants = await variantsRes.json();
       const attributes = await attributesRes.json();
       const orders = await ordersRes.json();
+      const recentOrdersData = await recentOrdersRes.json();
 
       // Calculate stats
       const totalProducts = Array.isArray(products) ? products.length : 0;
@@ -67,6 +70,9 @@ export default function Dashboard() {
         totalAttributes,
         totalOrders
       });
+
+      // Set recent orders
+      setRecentOrders(Array.isArray(recentOrdersData) ? recentOrdersData : []);
     } catch (error) {
       console.error('Error fetching stats:', error);
       setStats({
@@ -180,7 +186,7 @@ export default function Dashboard() {
                         stroke="url(#gradient1)"
                         strokeWidth="40"
                         strokeDasharray={`${((stats?.activeProducts || 0) / Math.max(stats?.totalProducts || 1, 1)) * 502.4} 502.4`}
-                        strokeDashoffset="125.6"
+                        strokeDashoffset="0"
                         transform="rotate(-90 100 100)"
                         style={{ transition: 'stroke-dasharray 1s ease' }}
                       />
@@ -267,6 +273,61 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Recent Orders Section */}
+            {recentOrders.length > 0 && (
+              <div style={{ marginTop: '32px' }}>
+                <h2 className={styles.sectionTitle}>Recent Orders</h2>
+                <div className={styles.ordersTable}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#1a202c' }}>Order</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#1a202c' }}>Customer</th>
+                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: '600', color: '#1a202c' }}>Items</th>
+                        <th style={{ padding: '16px', textAlign: 'right', fontWeight: '600', color: '#1a202c' }}>Total</th>
+                        <th style={{ padding: '16px', textAlign: 'center', fontWeight: '600', color: '#1a202c' }}>Status</th>
+                        <th style={{ padding: '16px', textAlign: 'center', fontWeight: '600', color: '#1a202c' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentOrders.map(order => (
+                        <tr key={order.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '16px', fontWeight: '600', color: '#2d3748' }}>
+                            #{order.orderNumber}
+                          </td>
+                          <td style={{ padding: '16px', color: '#4a5568' }}>
+                            {order.customerName || 'Guest'}
+                          </td>
+                          <td style={{ padding: '16px', color: '#4a5568' }}>
+                            {order.itemCount}
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'right', fontWeight: '600', color: '#2d3748' }}>
+                            {order.currency} {parseFloat(order.totalPrice).toFixed(2)}
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              background: order.financialStatus === 'paid' ? '#d1f0e5' : order.financialStatus === 'pending' ? '#fff4e6' : '#fed3d1',
+                              color: order.financialStatus === 'paid' ? '#004c3f' : order.financialStatus === 'pending' ? '#8b5000' : '#6a1b1b'
+                            }}>
+                              {order.financialStatus}
+                            </span>
+                          </td>
+                          <td style={{ padding: '16px', textAlign: 'center', color: '#718096', fontSize: '14px' }}>
+                            {new Date(order.createdAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>

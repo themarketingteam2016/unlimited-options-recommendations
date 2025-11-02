@@ -174,19 +174,6 @@ export default function Attributes() {
     setShowForm(true);
   };
 
-  if (loading) {
-    return (
-      <div className={styles.container}>
-        <Sidebar />
-        <div className={styles.main}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LoadingSpinner size="large" text="Loading attributes..." />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <Head>
@@ -197,7 +184,10 @@ export default function Attributes() {
 
       <main className={styles.main}>
         <div className={styles.header}>
-          <h1>Attributes</h1>
+          <div>
+            <h1>Attributes</h1>
+            <p className={styles.description}>Manage product attributes and their values</p>
+          </div>
           <button
             className={styles.btnPrimary}
             onClick={() => {
@@ -209,6 +199,13 @@ export default function Attributes() {
             {showForm ? 'Cancel' : '+ New Attribute'}
           </button>
         </div>
+
+        {loading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+            <LoadingSpinner size="large" text="Loading attributes..." />
+          </div>
+        ) : (
+          <>
 
         {message && (
           <div className={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
@@ -330,6 +327,8 @@ export default function Attributes() {
             ))
           )}
         </div>
+        </>
+        )}
       </main>
     </div>
   );

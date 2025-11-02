@@ -233,19 +233,6 @@ export default function Home() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className={styles.container}>
-        <Sidebar />
-        <main className={styles.main}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LoadingSpinner size="large" text="Loading products..." />
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <Head>
@@ -260,15 +247,21 @@ export default function Home() {
         <h1 className={styles.title}>Products</h1>
         <p className={styles.description}>Manage your product catalog and custom variants</p>
 
-        {message && (
-          <div className={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
-            {message.text}
+        {loading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+            <LoadingSpinner size="large" text="Loading products..." />
           </div>
-        )}
-
-        {!selectedProduct ? (
+        ) : (
           <>
-            {products.length > 0 && (
+            {message && (
+              <div className={message.type === 'success' ? styles.successMessage : styles.errorMessage}>
+                {message.text}
+              </div>
+            )}
+
+            {!selectedProduct ? (
+              <>
+                {products.length > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
                 <input
                   type="text"
@@ -577,6 +570,8 @@ export default function Home() {
               </>
             )}
           </>
+        )}
+        </>
         )}
       </main>
     </div>

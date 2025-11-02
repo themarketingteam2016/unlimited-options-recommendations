@@ -44,13 +44,21 @@
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 30px;
 }
 
 .header h1 {
   font-size: 28px;
   color: #202223;
+  margin: 0 0 8px 0;
+}
+
+.description {
+  color: #718096;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .btnPrimary {
