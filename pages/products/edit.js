@@ -92,8 +92,9 @@ export default function ProductEdit() {
       // Fetch existing recommendations using query params
       const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
       const recsData = await recsRes.json();
+      // Store internal product IDs (not shopify_product_id) since that's what we compare in the UI
       setSelectedRecommendations(
-        Array.isArray(recsData) ? recsData.map(r => r.recommended_product.shopify_product_id) : []
+        Array.isArray(recsData) ? recsData.map(r => r.recommended_product.id) : []
       );
 
       // Fetch variants
@@ -636,13 +637,21 @@ export default function ProductEdit() {
   const handleSaveRecommendations = async () => {
     try {
       setIsSaving(true);
-      console.log('Saving recommendations:', selectedRecommendations);
+      console.log('Saving recommendations (internal IDs):', selectedRecommendations);
       console.log('Product ID:', productId);
+
+      // Convert internal IDs to Shopify product IDs for the API
+      const shopifyProductIds = selectedRecommendations.map(internalId => {
+        const product = allProducts.find(p => p.id === internalId);
+        return product?.id; // Since products API returns internal ID as 'id', we use the internal ID
+      }).filter(Boolean);
+
+      console.log('Converted to IDs for API:', shopifyProductIds);
 
       const res = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recommendedProductIds: selectedRecommendations })
+        body: JSON.stringify({ recommendedProductIds: shopifyProductIds })
       });
 
       console.log('Response status:', res.status);

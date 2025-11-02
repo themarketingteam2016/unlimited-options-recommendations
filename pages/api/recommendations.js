@@ -9,12 +9,28 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      // Get internal product ID from shopify_product_id
-      const { data: product } = await supabaseAdmin
-        .from('products')
-        .select('id')
-        .eq('shopify_product_id', shopifyProductId)
-        .single();
+      // Try to get product by internal UUID first, then by shopify_product_id
+      let product = null;
+
+      // Check if productId is a UUID (has dashes)
+      if (shopifyProductId.includes('-')) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('id', shopifyProductId)
+          .single();
+        product = data;
+      }
+
+      // If not found or not a UUID, try shopify_product_id
+      if (!product) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('shopify_product_id', shopifyProductId)
+          .single();
+        product = data;
+      }
 
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
@@ -49,12 +65,28 @@ export default async function handler(req, res) {
       console.log('shopifyProductId:', shopifyProductId);
       console.log('recommendedProductIds:', recommendedProductIds);
 
-      // Get internal product ID from shopify_product_id
-      const { data: product } = await supabaseAdmin
-        .from('products')
-        .select('id')
-        .eq('shopify_product_id', shopifyProductId)
-        .single();
+      // Try to get product by internal UUID first, then by shopify_product_id
+      let product = null;
+
+      // Check if productId is a UUID (has dashes)
+      if (shopifyProductId.includes('-')) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('id', shopifyProductId)
+          .single();
+        product = data;
+      }
+
+      // If not found or not a UUID, try shopify_product_id
+      if (!product) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('shopify_product_id', shopifyProductId)
+          .single();
+        product = data;
+      }
 
       console.log('Found product:', product);
 
@@ -63,10 +95,13 @@ export default async function handler(req, res) {
       }
 
       // Get internal IDs for recommended products
+      // Check if the IDs are UUIDs (internal IDs) or Shopify product IDs
+      const isUUIDs = recommendedProductIds.length > 0 && recommendedProductIds[0].includes('-');
+
       const { data: recommendedProducts } = await supabaseAdmin
         .from('products')
         .select('id, shopify_product_id')
-        .in('shopify_product_id', recommendedProductIds);
+        .in(isUUIDs ? 'id' : 'shopify_product_id', recommendedProductIds);
 
       console.log('Found recommended products:', recommendedProducts);
 
