@@ -155,6 +155,118 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Charts Section */}
+            <div className={styles.chartsGrid}>
+              {/* Products Status Chart */}
+              <div className={styles.chartCard}>
+                <h3 className={styles.chartTitle}>Products Overview</h3>
+                <div className={styles.pieChart}>
+                  <div className={styles.pieChartCircle}>
+                    <svg width="200" height="200" viewBox="0 0 200 200">
+                      <circle
+                        cx="100"
+                        cy="100"
+                        r="80"
+                        fill="none"
+                        stroke="#e8f5f1"
+                        strokeWidth="40"
+                      />
+                      <circle
+                        cx="100"
+                        cy="100"
+                        r="80"
+                        fill="none"
+                        stroke="url(#gradient1)"
+                        strokeWidth="40"
+                        strokeDasharray={`${((stats?.activeProducts || 0) / Math.max(stats?.totalProducts || 1, 1)) * 502.4} 502.4`}
+                        strokeDashoffset="125.6"
+                        transform="rotate(-90 100 100)"
+                        style={{ transition: 'stroke-dasharray 1s ease' }}
+                      />
+                      <defs>
+                        <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#667eea" />
+                          <stop offset="100%" stopColor="#764ba2" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className={styles.pieChartCenter}>
+                      <div className={styles.pieChartValue}>
+                        {stats?.totalProducts > 0
+                          ? Math.round((stats.activeProducts / stats.totalProducts) * 100)
+                          : 0}%
+                      </div>
+                      <div className={styles.pieChartLabel}>Active</div>
+                    </div>
+                  </div>
+                  <div className={styles.chartLegend}>
+                    <div className={styles.legendItem}>
+                      <span className={styles.legendColor} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}></span>
+                      <span className={styles.legendText}>Active: {stats?.activeProducts || 0}</span>
+                    </div>
+                    <div className={styles.legendItem}>
+                      <span className={styles.legendColor} style={{ background: '#e8f5f1' }}></span>
+                      <span className={styles.legendText}>Inactive: {(stats?.totalProducts || 0) - (stats?.activeProducts || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity Stats */}
+              <div className={styles.chartCard}>
+                <h3 className={styles.chartTitle}>System Activity</h3>
+                <div className={styles.activityBars}>
+                  <div className={styles.activityItem}>
+                    <div className={styles.activityLabel}>
+                      <span>Orders</span>
+                      <span className={styles.activityValue}>{stats?.totalOrders || 0}</span>
+                    </div>
+                    <div className={styles.activityBar}>
+                      <div
+                        className={styles.activityProgress}
+                        style={{
+                          width: `${Math.min((stats?.totalOrders || 0) / 100 * 100, 100)}%`,
+                          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className={styles.activityItem}>
+                    <div className={styles.activityLabel}>
+                      <span>Products</span>
+                      <span className={styles.activityValue}>{stats?.totalProducts || 0}</span>
+                    </div>
+                    <div className={styles.activityBar}>
+                      <div
+                        className={styles.activityProgress}
+                        style={{
+                          width: `${Math.min((stats?.totalProducts || 0) / 50 * 100, 100)}%`,
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className={styles.activityItem}>
+                    <div className={styles.activityLabel}>
+                      <span>Attributes</span>
+                      <span className={styles.activityValue}>{stats?.totalAttributes || 0}</span>
+                    </div>
+                    <div className={styles.activityBar}>
+                      <div
+                        className={styles.activityProgress}
+                        style={{
+                          width: `${Math.min((stats?.totalAttributes || 0) / 20 * 100, 100)}%`,
+                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </>
         )}
       </main>
