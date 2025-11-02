@@ -9,12 +9,28 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      // Get internal product ID from shopify_product_id
-      const { data: product } = await supabaseAdmin
-        .from('products')
-        .select('id')
-        .eq('shopify_product_id', shopifyProductId)
-        .single();
+      // Try to get product by internal UUID first, then by shopify_product_id
+      let product = null;
+
+      // Check if productId is a UUID (has dashes)
+      if (shopifyProductId.includes('-')) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('id', shopifyProductId)
+          .single();
+        product = data;
+      }
+
+      // If not found or not a UUID, try shopify_product_id
+      if (!product) {
+        const { data } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('shopify_product_id', shopifyProductId)
+          .single();
+        product = data;
+      }
 
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
