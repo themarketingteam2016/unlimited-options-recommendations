@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Sidebar from '../components/Sidebar';
+import LoadingSpinner from '../components/LoadingSpinner';
 import styles from '../styles/Attributes.module.css';
 
 export default function Attributes() {
@@ -174,7 +175,14 @@ export default function Attributes() {
   };
 
   if (loading) {
-    return <div className={styles.loading}>Loading...</div>;
+    return (
+      <div className={styles.container}>
+        <Sidebar />
+        <div className={styles.main}>
+          <LoadingSpinner size="large" text="Loading attributes..." />
+        </div>
+      </div>
+    );
   }
 
   return (
