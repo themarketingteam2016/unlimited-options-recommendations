@@ -1,1812 +1,1437 @@
 {% comment %}
-  Product Customizer Integration
-
-  Usage: Include this snippet in your product template
-  {% render 'product-customizer', product: product %}
+Product Customizer Integration
+Usage: Include this snippet in your product template
+{% render 'product-customizer', product: product %}
 {% endcomment %}
-
 <div id="unlimited-customizer-{{ product.id }}" class="unlimited-customizer" data-product-id="{{ product.id }}">
-  <div class="unlimited-customizer__loading">
-    <div class="spinner"></div>
-    Loading customizer...
-  </div>
+<div class="unlimited-customizer__loading">
+<div class="spinner"></div>
+Loading customizer...
 </div>
-
+</div>
 <script>
 (function() {
-  const productId = 'gid://shopify/Product/{{ product.id }}';
-  const container = document.getElementById('unlimited-customizer-{{ product.id }}');
-
-  // Configuration - Update this with your app URL
-  const APP_URL = 'https://unlimtited-options-recommendations.vercel.app';
-
-  let variants = [];
-  let attributes = [];
-  let selectedOptions = {};
-  let selectedVariant = null;
-  let recommendations = [];
-  let selectedRecommendations = new Set();
-  let recommendationVariantsCache = {};
-  let productDataCache = {};
-  let recommendationUserSelections = {}; // Store user's manual selections for recommendations
-  let ringSize = ''; // Ring size selection (separate from variants)
-  let isRingProduct = false; // Track if this is a ring product
-  let availableRingSizes = []; // Custom ring sizes for this product
-
-  // Fetch product customizer data
-  async function loadCustomizer() {
-    try {
-      // Fetch product data to check if it's a ring product (using public endpoint)
-      try {
-        const productInfoRes = await fetch(`${APP_URL}/api/storefront/product-info?productId=${encodeURIComponent(productId)}`);
-        if (productInfoRes.ok) {
-          const productData = await productInfoRes.json();
-          isRingProduct = productData?.is_ring || false;
-
-          // Get custom ring sizes or use defaults
-          if (isRingProduct) {
-            availableRingSizes = productData?.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
-          }
-        }
-      } catch (e) {
-        console.log('Could not fetch ring size info:', e);
-      }
-
-      // Fetch variants from your API
-      const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
-      const variantsData = await variantsRes.json();
-
-      if (!variantsData || variantsData.length === 0) {
-        container.innerHTML = '<p>No custom options available for this product.</p>';
-        return;
-      }
-
-      variants = variantsData;
-
-      // Extract unique attributes
-      const uniqueAttrs = {};
-      variants.forEach(variant => {
-        variant.variant_options?.forEach(opt => {
-          if (opt.attribute) {
-            if (!uniqueAttrs[opt.attribute.id]) {
-              uniqueAttrs[opt.attribute.id] = {
-                ...opt.attribute,
-                values: []
-              };
-            }
-            if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
-              uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
-            }
-          }
-        });
-      });
-
-      attributes = Object.values(uniqueAttrs);
-
-      // Load recommendations
-      await loadRecommendations();
-
-      // Render customizer UI
-      renderCustomizer();
-
-    } catch (error) {
-      container.innerHTML = '<p>Error loading product options. Please refresh the page.</p>';
-    }
-  }
-
-  async function loadRecommendations() {
-    try {
-      const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/recommendations`);
-
-      if (!response.ok) {
-        recommendations = [];
-        return;
-      }
-
-      const data = await response.json();
-      recommendations = data || [];
-
-      // Fetch variants for each recommended product
-      for (const rec of recommendations) {
-        const product = rec.recommended_product;
-        if (product && product.shopify_product_id) {
-          const handle = product.handle || product.shopify_handle;
-          await fetchProductVariants(product.shopify_product_id, product.id, handle);
-          productDataCache[product.id] = {
-            handle: handle,
-            shopify_product_id: product.shopify_product_id
-          };
-        }
-      }
-    } catch (error) {
-      recommendations = [];
-    }
-  }
-
-  async function fetchProductVariants(shopifyProductId, internalProductId, productHandle) {
-    try {
-      const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
-      if (response.ok) {
-        const variants = await response.json();
-
-        // Also fetch Shopify product to get first variant ID for fallback mode
-        let shopifyFallbackVariantId = null;
-        if (productHandle) {
-          try {
-            const shopifyResponse = await fetch(`/products/${productHandle}.js`);
-            if (shopifyResponse.ok) {
-              const shopifyProduct = await shopifyResponse.json();
-              shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
-            }
-          } catch (e) {
-            // Silently fail
-          }
-        }
-
-        recommendationVariantsCache[internalProductId] = {
-          variants: variants || [],
-          shopifyProductId: shopifyProductId,
-          shopifyFallbackVariantId: shopifyFallbackVariantId
-        };
-
-        // Update price display if variants loaded
-        updateRecommendationPrice(internalProductId, variants);
-      } else {
-        recommendationVariantsCache[internalProductId] = {
-          variants: [],
-          shopifyProductId: shopifyProductId,
-          shopifyFallbackVariantId: null
-        };
-      }
-    } catch (error) {
-      recommendationVariantsCache[internalProductId] = {
-        variants: [],
-        shopifyProductId: shopifyProductId,
-        shopifyFallbackVariantId: null
-      };
-    }
-  }
-
-  function updateRecommendationPrice(productId, variants) {
-    const priceEl = container.querySelector(`.unlimited-recommendation-price[data-product-id="${productId}"]`);
-    if (priceEl && variants && variants.length > 0) {
-      // Find default variant or first variant
-      const defaultVariant = variants.find(v => v.is_default) || variants[0];
-      if (defaultVariant && defaultVariant.price) {
-        priceEl.innerHTML = `Starting from $${defaultVariant.price}`;
-      }
-    }
-  }
-
-  function renderCustomizer() {
-    const html = `
-      <div class="unlimited-customizer__content">
-        <h3 class="unlimited-customizer__title">Customize Your Product</h3>
-
-        <div class="unlimited-customizer__options">
-          ${attributes.map(attr => `
-            <div class="unlimited-option" data-attribute-id="${attr.id}">
-              <label class="unlimited-option__label">
-                ${attr.name}
-              </label>
-
-              <select class="unlimited-option__select" data-attribute-id="${attr.id}">
-                <option value="">Select ${attr.name}</option>
-                ${attr.values.map(value => {
-                  return `<option value="${value.id}">${value.value}</option>`;
-                }).join('')}
-              </select>
-
-              <div class="unlimited-option__preview" style="display: none;">
-                <img class="unlimited-option__image" src="" alt="">
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        ${isRingProduct ? `
-          <div class="unlimited-option" style="margin-top: 1rem;">
-            <label class="unlimited-option__label">Ring Size</label>
-            <select class="unlimited-ring-size__select" id="ring-size-select">
-              <option value="">Select Ring Size</option>
-              ${availableRingSizes.map(size =>
-                `<option value="${size}">${size}</option>`
-              ).join('')}
-            </select>
-          </div>
-        ` : ''}
-
-        <div class="unlimited-customizer__variant-info" style="display: none;">
-          <div class="unlimited-variant-price"></div>
-          <div class="unlimited-variant-sku" style="display: none;"></div>
-        </div>
-
-        ${recommendations.length > 0 ? `
-          <div class="unlimited-recommendations">
-            <h4 class="unlimited-recommendations__title">You May Also Like</h4>
-            <div class="unlimited-recommendations__grid">
-              ${recommendations.map(rec => {
-                const product = rec.recommended_product;
-                if (!product) return '';
-
-                const imageUrl = product.featuredImage?.url || product.image_url || '';
-
-                return `
-                  <div class="unlimited-recommendation-item" data-product-id="${product.id}">
-                    <input
-                      type="checkbox"
-                      class="unlimited-recommendation-checkbox"
-                      id="rec-${product.id}"
-                      data-product-id="${product.id}"
-                      data-product-name="${product.title}"
-                    >
-                    <label for="rec-${product.id}" class="unlimited-recommendation-label">
-                      ${imageUrl ? `
-                        <img src="${imageUrl}" alt="${product.title}" class="unlimited-recommendation-image">
-                      ` : `
-                        <div class="unlimited-recommendation-image unlimited-recommendation-placeholder">
-                          <span>No Image</span>
-                        </div>
-                      `}
-                      <div class="unlimited-recommendation-info">
-                        <div class="unlimited-recommendation-name">${product.title}</div>
-                      </div>
-                    </label>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <div class="unlimited-customizer__actions">
-          <button type="button" class="unlimited-buy-now btn btn-primary" disabled>
-            Select All Options
-          </button>
-          <button type="button" class="unlimited-add-to-cart btn btn-secondary" disabled style="display: none;">
-            Add to Cart (Preview)
-          </button>
-        </div>
-      </div>
-    `;
-
-    container.innerHTML = html;
-    attachEventListeners();
-    initializeDefaultSelections();
-  }
-
-  function attachEventListeners() {
-    // Ring size change handler
-    const ringSizeSelect = container.querySelector('#ring-size-select');
-    if (ringSizeSelect) {
-      ringSizeSelect.addEventListener('change', function() {
-        ringSize = this.value;
-      });
-    }
-
-    // Dropdown change handlers
-    const selects = container.querySelectorAll('.unlimited-option__select');
-    selects.forEach(select => {
-      select.addEventListener('change', function() {
-        const attrId = this.dataset.attributeId;
-        const valueId = this.value;
-
-        if (valueId) {
-          selectedOptions[attrId] = valueId;
-
-          // Show image preview
-          const attr = attributes.find(a => a.id === attrId);
-          const value = attr?.values.find(v => v.id === valueId);
-          const preview = this.closest('.unlimited-option').querySelector('.unlimited-option__preview');
-          const previewImg = preview.querySelector('.unlimited-option__image');
-
-          if (value?.image_url) {
-            previewImg.src = value.image_url;
-            previewImg.alt = value.value;
-            preview.style.display = 'block';
-          } else {
-            preview.style.display = 'none';
-          }
-        } else {
-          delete selectedOptions[attrId];
-        }
-
-        updateVariant();
-      });
-    });
-
-    // Recommendation checkbox handlers
-    const recCheckboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
-    recCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', function() {
-        const productId = this.dataset.productId;
-        const productName = this.dataset.productName;
-
-        // VALIDATION: Check if all main product options are selected
-        if (this.checked) {
-          // Check if all required attributes have selections
-          const allOptionsSelected = attributes.every(attr => {
-            return selectedOptions[attr.id] !== undefined && selectedOptions[attr.id] !== null;
-          });
-
-          if (!allOptionsSelected) {
-            // Prevent selection
-            this.checked = false;
-
-            // Show validation message
-            const missingOptions = attributes
-              .filter(attr => !selectedOptions[attr.id])
-              .map(attr => attr.name)
-              .join(', ');
-
-            alert(`⚠️ Please select all options for the main product first.\n\nMissing: ${missingOptions}\n\nThen you can add "${productName}" to your bundle.`);
-            return;
-          }
-
-          // If validation passed, add to selections
-          selectedRecommendations.add(productId);
-        } else {
-          selectedRecommendations.delete(productId);
-        }
-
-        updateVariant();
-        updateRecommendationPreview();
-      });
-    });
-
-    // Function to show what options will be selected for recommendations
-    function updateRecommendationPreview() {
-      const previewContainer = container.querySelector('.unlimited-bundle-preview');
-
-      if (selectedRecommendations.size === 0) {
-        if (previewContainer) {
-          previewContainer.style.display = 'none';
-        }
-        return;
-      }
-
-      if (!previewContainer) {
-        const previewDiv = document.createElement('div');
-        previewDiv.className = 'unlimited-bundle-preview';
-        const actionsSection = container.querySelector('.unlimited-customizer__actions');
-        actionsSection.parentNode.insertBefore(previewDiv, actionsSection);
-      }
-
-      const preview = container.querySelector('.unlimited-bundle-preview');
-      const mainSelections = getMainProductSelections();
-
-      let previewHTML = `
-        <div class="unlimited-bundle-preview__title">Bundle Items (${selectedRecommendations.size + 1} products):</div>
-        <div class="unlimited-bundle-preview__items">
-          <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--main">
-            <strong>Main Product:</strong> Selected options will be added
-          </div>
-      `;
-
-      selectedRecommendations.forEach(productId => {
-        const cachedData = recommendationVariantsCache[productId];
-        const recVariants = cachedData?.variants || [];
-        const recommendation = recommendations.find(r => r.recommended_product.id === productId);
-        const productName = recommendation?.recommended_product?.title || 'Recommended Product';
-
-        if (recVariants.length === 0) {
-          previewHTML += `
-            <div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
-              <strong>${productName}:</strong> <span class="unlimited-error">No variants available</span>
-            </div>
-          `;
-          return;
-        }
-
-        const recAttributes = extractAttributes(recVariants);
-        const preFilledSelections = {};
-        const selectionDetails = [];
-
-        recAttributes.forEach(attr => {
-          // First check if user has manually selected a value for this attribute
-          if (recommendationUserSelections[productId] && recommendationUserSelections[productId][attr.id]) {
-            preFilledSelections[attr.id] = recommendationUserSelections[productId][attr.id];
-            const userValue = attr.values.find(v => v.id === recommendationUserSelections[productId][attr.id]);
-            if (userValue) {
-              selectionDetails.push({
-                attrName: attr.name,
-                value: userValue.value,
-                matchType: 'user'
-              });
-            }
-            return; // Skip auto-matching for this attribute
-          }
-
-          const matchingMainSelection = Object.values(mainSelections).find(sel =>
-            sel.attrName && attr.name &&
-            sel.attrName.toLowerCase() === attr.name.toLowerCase()
-          );
-
-          let selectedValueText = '';
-          let matchType = '';
-
-          if (matchingMainSelection) {
-            const matchedValueId = findMatchingValue(
-              { valueText: matchingMainSelection.valueText },
-              attr.values
-            );
-
-            if (matchedValueId) {
-              preFilledSelections[attr.id] = matchedValueId;
-              const matchedValue = attr.values.find(v => v.id === matchedValueId);
-              selectedValueText = matchedValue?.value || '';
-
-              if (matchedValue?.value.toLowerCase() === matchingMainSelection.valueText.toLowerCase()) {
-                matchType = 'exact';
-              } else {
-                matchType = 'nearest';
-              }
-            }
-          } else {
-            const defaultValue = attr.values.find(v => v.is_default);
-            if (defaultValue) {
-              preFilledSelections[attr.id] = defaultValue.id;
-              selectedValueText = defaultValue.value;
-              matchType = 'default';
-            }
-          }
-
-          if (selectedValueText) {
-            selectionDetails.push({
-              attrName: attr.name,
-              value: selectedValueText,
-              matchType: matchType
-            });
-          }
-        });
-
-        // Always build editable option selectors for this recommendation
-        const optionSelectorsHTML = recAttributes.map(attr => {
-          const selectedValue = preFilledSelections[attr.id];
-          const matchedDetail = selectionDetails.find(d => d.attrName === attr.name);
-
-          return `
-            <div class="unlimited-rec-option">
-              <label class="unlimited-rec-option__label">${attr.name}:</label>
-              <select
-                class="unlimited-rec-option__select"
-                data-product-id="${productId}"
-                data-attribute-id="${attr.id}"
-              >
-                ${attr.values.map(value => `
-                  <option
-                    value="${value.id}"
-                    ${value.id === selectedValue ? 'selected' : ''}
-                  >
-                    ${value.value}
-                    ${value.id === selectedValue && matchedDetail?.matchType === 'exact' ? ' ✓' : ''}
-                    ${value.id === selectedValue && matchedDetail?.matchType === 'nearest' ? ' ~' : ''}
-                  </option>
-                `).join('')}
-              </select>
-            </div>
-          `;
-        }).join('');
-
-        // Check if current selections match a variant (for validation feedback)
-        const matchedVariant = recVariants.find(variant => {
-          return variant.variant_options?.every(opt =>
-            preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-          );
-        });
-
-        // Get the price for the matched variant
-        const variantPrice = matchedVariant?.price ? `$${matchedVariant.price}` : '';
-        const priceDisplay = matchedVariant
-          ? `<div class="unlimited-bundle-price">Price: <strong>${variantPrice}</strong></div>`
-          : '<div class="unlimited-bundle-price unlimited-bundle-price--error">Select valid combination to see price</div>';
-
-        previewHTML += `
-          <div class="unlimited-bundle-preview__item ${matchedVariant ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
-            <div class="unlimited-bundle-item-header">
-              <strong>${productName}</strong>
-              <span class="unlimited-edit-badge">✏️ Editable</span>
-            </div>
-            ${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : '<div class="unlimited-success-text">✓ Valid selection</div>'}
-            ${priceDisplay}
-            <div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
-              ${optionSelectorsHTML}
-            </div>
-          </div>
-        `;
-      });
-
-      previewHTML += `
-        </div>
-        <div class="unlimited-bundle-preview__note">
-          <div class="unlimited-bundle-help-text">
-            <strong>💡 How it works:</strong>
-            <ul>
-              <li>Options are <strong>automatically matched</strong> from your main product selection</li>
-              <li>✓ = Exact match | ~ = Nearest match</li>
-              <li><strong>You can change any option</strong> using the dropdowns before adding to cart</li>
-            </ul>
-          </div>
-        </div>
-      `;
-
-      preview.innerHTML = previewHTML;
-      preview.style.display = 'block';
-
-      // Add event listeners to the new recommendation option selects
-      const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select');
-      recOptionSelects.forEach(select => {
-        select.addEventListener('change', function() {
-          const productId = this.dataset.productId;
-          const attributeId = this.dataset.attributeId;
-          const valueId = this.value;
-
-          // Store the user's manual selection
-          if (!recommendationUserSelections[productId]) {
-            recommendationUserSelections[productId] = {};
-          }
-          recommendationUserSelections[productId][attributeId] = valueId;
-
-          // Trigger a re-render of the preview to show updated selections
-          updateRecommendationPreview();
-        });
-      });
-    }
-
-    // Buy Now button (primary action)
-    const buyNowBtn = container.querySelector('.unlimited-buy-now');
-    buyNowBtn.addEventListener('click', buyNow);
-
-    // Add to cart button (secondary/hidden)
-    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
-    if (addToCartBtn) {
-      addToCartBtn.addEventListener('click', addToCart);
-    }
-  }
-
-  function initializeDefaultSelections() {
-    if (!attributes || attributes.length === 0) {
-      return;
-    }
-
-    // No default selections - user must make selections manually
-
-    // Update variant info to show price and details
-    updateVariant();
-  }
-
-  function updateVariant() {
-    const variantInfo = container.querySelector('.unlimited-customizer__variant-info');
-    const priceEl = container.querySelector('.unlimited-variant-price');
-    const skuEl = container.querySelector('.unlimited-variant-sku');
-    const buyNowBtn = container.querySelector('.unlimited-buy-now');
-    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
-
-    // Check if all options selected
-    const allSelected = attributes.every(attr => selectedOptions[attr.id]);
-
-    if (allSelected) {
-      // Find matching variant
-      const match = variants.find(variant => {
-        return variant.variant_options?.every(opt =>
-          selectedOptions[opt.attribute.id] === opt.attribute_value.id
-        );
-      });
-
-      selectedVariant = match || null;
-
-      if (selectedVariant) {
-        // Show variant info
-        variantInfo.style.display = 'block';
-
-        // Calculate bundle price if recommendations selected
-        let totalPrice = parseFloat(selectedVariant.price);
-
-        if (selectedRecommendations.size > 0) {
-          const mainSelections = getMainProductSelections();
-          let recommendationsPriceTotal = 0;
-
-          selectedRecommendations.forEach(productId => {
-            const cachedData = recommendationVariantsCache[productId];
-            const recVariants = cachedData?.variants || [];
-
-            if (recVariants.length > 0) {
-              const recAttributes = extractAttributes(recVariants);
-              const preFilledSelections = {};
-
-              recAttributes.forEach(attr => {
-                const matchingMainSelection = Object.values(mainSelections).find(sel =>
-                  sel.attrName && attr.name &&
-                  sel.attrName.toLowerCase() === attr.name.toLowerCase()
-                );
-
-                if (matchingMainSelection) {
-                  const matchedValueId = findMatchingValue(
-                    { valueText: matchingMainSelection.valueText },
-                    attr.values
-                  );
-                  if (matchedValueId) {
-                    preFilledSelections[attr.id] = matchedValueId;
-                  }
-                } else {
-                  const defaultValue = attr.values.find(v => v.is_default);
-                  if (defaultValue) {
-                    preFilledSelections[attr.id] = defaultValue.id;
-                  }
-                }
-              });
-
-              const matchedVariant = recVariants.find(variant => {
-                return variant.variant_options?.every(opt =>
-                  preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-                );
-              });
-
-              if (matchedVariant && matchedVariant.price) {
-                recommendationsPriceTotal += parseFloat(matchedVariant.price);
-              }
-            }
-          });
-
-          totalPrice += recommendationsPriceTotal;
-          priceEl.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="font-size: 24px; font-weight: 700; color: #008060;">
-                Bundle Total: $${totalPrice.toFixed(2)}
-              </div>
-              <div style="font-size: 12px; color: #666;">
-                Main: $${selectedVariant.price} + ${selectedRecommendations.size} item${selectedRecommendations.size > 1 ? 's' : ''}: $${recommendationsPriceTotal.toFixed(2)}
-              </div>
-            </div>
-          `;
-        } else {
-          priceEl.innerHTML = `<strong>Price:</strong> $${selectedVariant.price}`;
-        }
-
-        if (selectedVariant.sku) {
-          skuEl.innerHTML = `<strong>SKU:</strong> ${selectedVariant.sku}`;
-          skuEl.style.display = 'block';
-        }
-
-        // Enable buy now button with dynamic text
-        buyNowBtn.disabled = false;
-
-        if (selectedRecommendations.size > 0) {
-          buyNowBtn.textContent = 'Buy Bundle Now';
-        } else {
-          buyNowBtn.textContent = 'Buy Now';
-        }
-
-        // Also enable add to cart if visible
-        if (addToCartBtn) {
-          addToCartBtn.disabled = false;
-          addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
-        }
-      } else {
-        variantInfo.style.display = 'none';
-        buyNowBtn.disabled = true;
-        buyNowBtn.textContent = 'Variant Not Available';
-        if (addToCartBtn) {
-          addToCartBtn.disabled = true;
-          addToCartBtn.textContent = 'Variant Not Available';
-        }
-      }
-    } else {
-      // Show price placeholder when no selections made
-      variantInfo.style.display = 'block';
-      priceEl.innerHTML = '<span style="font-style: italic; color: #6d7175;">Price shown after selections</span>';
-      skuEl.style.display = 'none';
-
-      buyNowBtn.disabled = true;
-      buyNowBtn.textContent = 'Select All Options';
-      if (addToCartBtn) {
-        addToCartBtn.disabled = true;
-        addToCartBtn.textContent = 'Select All Options';
-      }
-    }
-  }
-
-  // Get main product selections for smart pre-fill
-  function getMainProductSelections() {
-    const selections = {};
-
-    attributes.forEach(attr => {
-      const valueId = selectedOptions[attr.id];
-      if (valueId) {
-        const value = attr.values.find(v => v.id === valueId);
-        if (value) {
-          selections[attr.id] = {
-            valueId: valueId,
-            attrName: attr.name,
-            valueText: value.value
-          };
-        }
-      }
-    });
-
-    return selections;
-  }
-
-  // Find matching or nearest attribute value
-  function findMatchingValue(mainSelection, availableValues) {
-    if (!mainSelection || !availableValues || availableValues.length === 0) {
-      return null;
-    }
-
-    // First try: Exact match by value text (case-insensitive)
-    const exactMatch = availableValues.find(v =>
-      v.value.toLowerCase() === mainSelection.valueText.toLowerCase()
-    );
-    if (exactMatch) return exactMatch.id;
-
-    // Second try: Partial match (contains)
-    const partialMatch = availableValues.find(v =>
-      v.value.toLowerCase().includes(mainSelection.valueText.toLowerCase()) ||
-      mainSelection.valueText.toLowerCase().includes(v.value.toLowerCase())
-    );
-    if (partialMatch) return partialMatch.id;
-
-    // Third try: For numeric values, find nearest (e.g., carat weight)
-    const mainValue = parseFloat(mainSelection.valueText);
-    if (!isNaN(mainValue)) {
-      const numericValues = availableValues
-        .map(v => ({ ...v, numeric: parseFloat(v.value) }))
-        .filter(v => !isNaN(v.numeric));
-
-      if (numericValues.length > 0) {
-        const nearest = numericValues.reduce((prev, curr) =>
-          Math.abs(curr.numeric - mainValue) < Math.abs(prev.numeric - mainValue) ? curr : prev
-        );
-        return nearest.id;
-      }
-    }
-
-    // No match found - return default or first
-    const defaultValue = availableValues.find(v => v.is_default);
-    return defaultValue?.id || null;
-  }
-
-  // Extract attributes from variants
-  function extractAttributes(variants) {
-    const uniqueAttrs = {};
-
-    variants.forEach(variant => {
-      variant.variant_options?.forEach(opt => {
-        if (opt.attribute) {
-          if (!uniqueAttrs[opt.attribute.id]) {
-            uniqueAttrs[opt.attribute.id] = {
-              ...opt.attribute,
-              values: []
-            };
-          }
-          if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
-            uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
-          }
-        }
-      });
-    });
-
-    return Object.values(uniqueAttrs);
-  }
-
-  async function addToCart() {
-    if (!selectedVariant) return;
-
-    const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
-    addToCartBtn.disabled = true;
-    addToCartBtn.textContent = 'Adding...';
-
-    try {
-      const itemsToAdd = [];
-
-      // Add main product via API first
-      const apiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          variantId: selectedVariant.id,
-          quantity: 1,
-          ringSize: ringSize || null
-        })
-      });
-
-      if (!apiResponse.ok) {
-        const error = await apiResponse.json();
-        throw new Error(error.error || 'Failed to prepare cart');
-      }
-
-      const apiData = await apiResponse.json();
-
-      // Handle fallback mode for custom variants
-      if (apiData.fallback && apiData.variant) {
-        const productVariantId = {{ product.variants.first.id }};
-
-        // Use properties from API response
-        const properties = apiData.variant.properties || {
-          '_Custom_Variant': 'Yes',
-          '_Price': `$${apiData.variant.price}`
-        };
-
-        // Add Ring Size if selected
-        if (ringSize) {
-          properties['Ring Size'] = ringSize;
-        }
-
-        itemsToAdd.push({
-          id: productVariantId,
-          quantity: 1,
-          properties: properties
-        });
-      } else if (apiData.success && apiData.shopifyVariantId) {
-        // Direct Shopify variant (if synced)
-        const itemToAdd = {
-          id: apiData.shopifyVariantId,
-          quantity: 1
-        };
-
-        // Add Ring Size if selected
-        if (ringSize) {
-          itemToAdd.properties = {
-            'Ring Size': ringSize
-          };
-        }
-
-        itemsToAdd.push(itemToAdd);
-      } else {
-        throw new Error('Invalid API response format');
-      }
-
-      // Handle recommendations with smart pre-fill if any selected
-      if (selectedRecommendations.size > 0) {
-        const mainSelections = getMainProductSelections();
-        const recommendationErrors = [];
-
-        for (const productId of selectedRecommendations) {
-          const cachedData = recommendationVariantsCache[productId];
-          const recVariants = cachedData?.variants || [];
-
-          if (recVariants.length === 0) {
-            recommendationErrors.push(`Product ${productId} has no variants`);
-            continue;
-          }
-
-          // Extract attributes for this recommendation
-          const recAttributes = extractAttributes(recVariants);
-
-          // Read user selections from the editable preview dropdowns (if available)
-          // Otherwise fall back to auto-filled values
-          const userSelections = {};
-          const bundlePreview = container.querySelector('.unlimited-bundle-preview');
-
-          if (bundlePreview) {
-            const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
-            recSelects.forEach(select => {
-              const attrId = select.dataset.attributeId;
-              const valueId = select.value;
-              if (attrId && valueId) {
-                userSelections[attrId] = valueId;
-              }
-            });
-          }
-
-          // Build pre-filled selections as fallback (for attributes not in userSelections)
-          const preFilledSelections = { ...userSelections };
-
-          recAttributes.forEach(attr => {
-            // Skip if user already selected this attribute
-            if (preFilledSelections[attr.id]) {
-              return;
-            }
-
-            // Try to match with main product selections
-            const matchingMainSelection = Object.values(mainSelections).find(sel =>
-              sel.attrName && attr.name &&
-              sel.attrName.toLowerCase() === attr.name.toLowerCase()
-            );
-
-            if (matchingMainSelection) {
-              const matchedValueId = findMatchingValue(
-                { valueText: matchingMainSelection.valueText },
-                attr.values
-              );
-
-              if (matchedValueId) {
-                preFilledSelections[attr.id] = matchedValueId;
-              }
-            } else {
-              // No match, use default or first
-              const defaultValue = attr.values.find(v => v.is_default);
-              if (defaultValue) {
-                preFilledSelections[attr.id] = defaultValue.id;
-              }
-            }
-          });
-
-          // Find matching variant from pre-filled selections
-          const matchedVariant = recVariants.find(variant => {
-            return variant.variant_options?.every(opt =>
-              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-            );
-          });
-
-          if (matchedVariant) {
-            // Add recommendation via API
-            try {
-              const recApiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  variantId: matchedVariant.id,
-                  quantity: 1
-                })
-              });
-
-              if (recApiResponse.ok) {
-                const recApiData = await recApiResponse.json();
-
-                if (recApiData.fallback && recApiData.variant) {
-                  // Fallback mode: use Shopify product's first variant with properties
-                  const shopifyFallbackVariantId = cachedData?.shopifyFallbackVariantId;
-
-                  if (shopifyFallbackVariantId) {
-                    itemsToAdd.push({
-                      id: shopifyFallbackVariantId,
-                      quantity: 1,
-                      properties: recApiData.variant.properties || {}
-                    });
-                  } else {
-                    recommendationErrors.push(`No fallback variant for product ${productId}`);
-                  }
-                } else if (recApiData.success && recApiData.shopifyVariantId) {
-                  // Direct Shopify variant
-                  itemsToAdd.push({
-                    id: recApiData.shopifyVariantId,
-                    quantity: 1
-                  });
-                }
-              } else {
-                recommendationErrors.push(`API error for product ${productId}`);
-              }
-            } catch (err) {
-              recommendationErrors.push(`Error adding product ${productId}: ${err.message}`);
-            }
-          } else {
-            recommendationErrors.push(`No matching variant found for product ${productId}`);
-          }
-        }
-      }
-
-      // Validate all items have valid IDs
-      const invalidItems = itemsToAdd.filter(item => !item.id || item.id === '0' || item.id === 0);
-      if (invalidItems.length > 0) {
-        throw new Error(`${invalidItems.length} items have invalid variant IDs`);
-      }
-
-      // Add all items to cart
-      const response = await fetch('/cart/add.js', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items: itemsToAdd })
-      });
-
-      const cartResponseText = await response.text();
-
-      let cartData;
-      try {
-        cartData = JSON.parse(cartResponseText);
-      } catch (e) {
-        throw new Error('Invalid cart response format');
-      }
-
-      if (!response.ok) {
-        throw new Error(cartData.description || cartData.message || 'Failed to add to cart');
-      }
-
-      // Success!
-      addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
-
-      // Clear recommendation selections
-      selectedRecommendations.clear();
-      const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
-      checkboxes.forEach(cb => cb.checked = false);
-
-      // Hide bundle preview
-      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
-      if (bundlePreview) {
-        bundlePreview.style.display = 'none';
-      }
-
-      // Trigger multiple cart update events to ensure refresh
-      document.dispatchEvent(new CustomEvent('cart:updated'));
-      document.dispatchEvent(new CustomEvent('cart:refresh'));
-
-      // Trigger Shopify theme cart updates
-      if (typeof window.Shopify !== 'undefined') {
-        if (window.Shopify.onCartUpdate) {
-          window.Shopify.onCartUpdate();
-        }
-      }
-
-      // Try to refresh cart drawer/section if available
-      fetch('/cart.js')
-        .then(r => r.json())
-        .then(cart => {
-          document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
-        })
-        .catch(e => {});
-
-      // Reset after 2 seconds
-      setTimeout(() => {
-        addToCartBtn.textContent = 'Add to Cart';
-        addToCartBtn.disabled = false;
-      }, 2000);
-    } catch (error) {
-      addToCartBtn.textContent = 'Error - Try Again';
-
-      alert(`Failed to add to cart: ${error.message}\n\nCheck console for details.`);
-
-      setTimeout(() => {
-        const hasRecommendations = selectedRecommendations.size > 0;
-        addToCartBtn.textContent = hasRecommendations ? 'Add Bundle to Cart' : 'Add to Cart';
-        addToCartBtn.disabled = false;
-      }, 2000);
-    }
-  }
-
-  async function buyNow() {
-    if (!selectedVariant) return;
-
-    const buyNowBtn = container.querySelector('.unlimited-buy-now');
-    buyNowBtn.disabled = true;
-    buyNowBtn.textContent = 'Creating checkout...';
-
-    try {
-      const itemsToProcess = [];
-
-      // Add main product
-      itemsToProcess.push({
-        variantId: selectedVariant.id,
-        quantity: 1,
-        ringSize: ringSize || null
-      });
-
-      // Handle recommendations with smart pre-fill if any selected
-      if (selectedRecommendations.size > 0) {
-        const mainSelections = getMainProductSelections();
-
-        for (const productId of selectedRecommendations) {
-          const cachedData = recommendationVariantsCache[productId];
-          const recVariants = cachedData?.variants || [];
-
-          if (recVariants.length === 0) {
-            continue;
-          }
-
-          // Extract attributes for this recommendation
-          const recAttributes = extractAttributes(recVariants);
-
-          // Read user selections from the editable preview dropdowns (if available)
-          // Otherwise fall back to auto-filled values
-          const userSelections = {};
-          const bundlePreview = container.querySelector('.unlimited-bundle-preview');
-
-          if (bundlePreview) {
-            const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
-            recSelects.forEach(select => {
-              const attrId = select.dataset.attributeId;
-              const valueId = select.value;
-              if (attrId && valueId) {
-                userSelections[attrId] = valueId;
-              }
-            });
-          }
-
-          // Build pre-filled selections as fallback
-          const preFilledSelections = { ...userSelections };
-
-          recAttributes.forEach(attr => {
-            // Skip if user already selected this attribute
-            if (preFilledSelections[attr.id]) {
-              return;
-            }
-
-            // Try to match with main product selections
-            const matchingMainSelection = Object.values(mainSelections).find(sel =>
-              sel.attrName && attr.name &&
-              sel.attrName.toLowerCase() === attr.name.toLowerCase()
-            );
-
-            if (matchingMainSelection) {
-              const matchedValueId = findMatchingValue(
-                { valueText: matchingMainSelection.valueText },
-                attr.values
-              );
-
-              if (matchedValueId) {
-                preFilledSelections[attr.id] = matchedValueId;
-              }
-            } else {
-              // No match, use default or first
-              const defaultValue = attr.values.find(v => v.is_default);
-              if (defaultValue) {
-                preFilledSelections[attr.id] = defaultValue.id;
-              }
-            }
-          });
-
-          // Find matching variant from pre-filled selections
-          const matchedVariant = recVariants.find(variant => {
-            return variant.variant_options?.every(opt =>
-              preFilledSelections[opt.attribute.id] === opt.attribute_value.id
-            );
-          });
-
-          if (matchedVariant) {
-            itemsToProcess.push({
-              variantId: matchedVariant.id,
-              quantity: 1
-            });
-          }
-        }
-      }
-
-      // Call create-checkout API
-      const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items: itemsToProcess })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to create checkout');
-      }
-
-      if (!data.success || !data.checkoutUrl) {
-        throw new Error('No checkout URL returned');
-      }
-
-      // Clear recommendation selections
-      selectedRecommendations.clear();
-      const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
-      checkboxes.forEach(cb => cb.checked = false);
-
-      // Hide bundle preview
-      const bundlePreview = container.querySelector('.unlimited-bundle-preview');
-      if (bundlePreview) {
-        bundlePreview.style.display = 'none';
-      }
-
-      // Redirect to checkout
-      window.location.href = data.checkoutUrl;
-
-    } catch (error) {
-      buyNowBtn.textContent = 'Error - Try Again';
-
-      alert(`Failed to create checkout: ${error.message}\n\nCheck console for details.`);
-
-      setTimeout(() => {
-        const hasRecommendations = selectedRecommendations.size > 0;
-        buyNowBtn.textContent = hasRecommendations ? 'Buy Bundle Now' : 'Buy Now';
-        buyNowBtn.disabled = false;
-      }, 2000);
-    }
-  }
-
-  // Initialize
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadCustomizer);
-  } else {
-    loadCustomizer();
-  }
+const productId = 'gid://shopify/Product/{{ product.id }}';
+const container = document.getElementById('unlimited-customizer-{{ product.id }}');
+const APP_URL = 'https://unlimtited-options-recommendations.vercel.app';
+let variants = [];
+let attributes = [];
+let selectedOptions = {};
+let selectedVariant = null;
+let recommendations = [];
+let selectedRecommendations = new Set();
+let recommendationVariantsCache = {};
+let productDataCache = {};
+let recommendationUserSelections = {}; 
+let ringSize = ''; 
+let isRingProduct = false; 
+let availableRingSizes = []; 
+async function loadCustomizer() {
+try {
+try {
+const productInfoRes = await fetch(`${APP_URL}/api/storefront/product-info?productId=${encodeURIComponent(productId)}`);
+if (productInfoRes.ok) {
+const productData = await productInfoRes.json();
+isRingProduct = productData?.is_ring || false;
+if (isRingProduct) {
+availableRingSizes = productData?.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
+}
+}
+} catch (e) {
+}
+const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
+const variantsData = await variantsRes.json();
+if (!variantsData || variantsData.length === 0) {
+container.innerHTML = '<p>No custom options available for this product.</p>';
+return;
+}
+variants = variantsData;
+const uniqueAttrs = {};
+variants.forEach(variant => {
+variant.variant_options?.forEach(opt => {
+if (opt.attribute) {
+if (!uniqueAttrs[opt.attribute.id]) {
+uniqueAttrs[opt.attribute.id] = {
+...opt.attribute,
+values: []
+};
+}
+if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
+uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
+}
+}
+});
+});
+attributes = Object.values(uniqueAttrs);
+await loadRecommendations();
+renderCustomizer();
+} catch (error) {
+container.innerHTML = '<p>Error loading product options. Please refresh the page.</p>';
+}
+}
+async function loadRecommendations() {
+try {
+const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/recommendations`);
+if (!response.ok) {
+recommendations = [];
+return;
+}
+const data = await response.json();
+recommendations = data || [];
+for (const rec of recommendations) {
+const product = rec.recommended_product;
+if (product && product.shopify_product_id) {
+const handle = product.handle || product.shopify_handle;
+await fetchProductVariants(product.shopify_product_id, product.id, handle);
+productDataCache[product.id] = {
+handle: handle,
+shopify_product_id: product.shopify_product_id
+};
+}
+}
+} catch (error) {
+recommendations = [];
+}
+}
+async function fetchProductVariants(shopifyProductId, internalProductId, productHandle) {
+try {
+const response = await fetch(`${APP_URL}/api/products/${encodeURIComponent(shopifyProductId)}/variants`);
+if (response.ok) {
+const variants = await response.json();
+let shopifyFallbackVariantId = null;
+if (productHandle) {
+try {
+const shopifyResponse = await fetch(`/products/${productHandle}.js`);
+if (shopifyResponse.ok) {
+const shopifyProduct = await shopifyResponse.json();
+shopifyFallbackVariantId = shopifyProduct.variants?.[0]?.id;
+}
+} catch (e) {
+}
+}
+recommendationVariantsCache[internalProductId] = {
+variants: variants || [],
+shopifyProductId: shopifyProductId,
+shopifyFallbackVariantId: shopifyFallbackVariantId
+};
+updateRecommendationPrice(internalProductId, variants);
+} else {
+recommendationVariantsCache[internalProductId] = {
+variants: [],
+shopifyProductId: shopifyProductId,
+shopifyFallbackVariantId: null
+};
+}
+} catch (error) {
+recommendationVariantsCache[internalProductId] = {
+variants: [],
+shopifyProductId: shopifyProductId,
+shopifyFallbackVariantId: null
+};
+}
+}
+function updateRecommendationPrice(productId, variants) {
+const priceEl = container.querySelector(`.unlimited-recommendation-price[data-product-id="${productId}"]`);
+if (priceEl && variants && variants.length > 0) {
+const defaultVariant = variants.find(v => v.is_default) || variants[0];
+if (defaultVariant && defaultVariant.price) {
+priceEl.innerHTML = `Starting from $${defaultVariant.price}`;
+}
+}
+}
+function renderCustomizer() {
+const html = `
+<div class="unlimited-customizer__content">
+<h3 class="unlimited-customizer__title">Customize Your Product</h3>
+<div class="unlimited-customizer__options">
+${attributes.map(attr => `
+<div class="unlimited-option" data-attribute-id="${attr.id}">
+<label class="unlimited-option__label">
+${attr.name}
+</label>
+<select class="unlimited-option__select" data-attribute-id="${attr.id}">
+<option value="">Select ${attr.name}</option>
+${attr.values.map(value => {
+return `<option value="${value.id}">${value.value}</option>`;
+}).join('')}
+</select>
+<div class="unlimited-option__preview" style="display: none;">
+<img class="unlimited-option__image" src="" alt="">
+</div>
+</div>
+`).join('')}
+</div>
+${isRingProduct ? `
+<div class="unlimited-option" style="margin-top: 1rem;">
+<label class="unlimited-option__label">Ring Size</label>
+<select class="unlimited-ring-size__select" id="ring-size-select">
+<option value="">Select Ring Size</option>
+${availableRingSizes.map(size =>
+`<option value="${size}">${size}</option>`
+).join('')}
+</select>
+</div>
+` : ''}
+<div class="unlimited-customizer__variant-info" style="display: none;">
+<div class="unlimited-variant-price"></div>
+<div class="unlimited-variant-sku" style="display: none;"></div>
+</div>
+${recommendations.length > 0 ? `
+<div class="unlimited-recommendations">
+<h4 class="unlimited-recommendations__title">You May Also Like</h4>
+<div class="unlimited-recommendations__grid">
+${recommendations.map(rec => {
+const product = rec.recommended_product;
+if (!product) return '';
+const imageUrl = product.featuredImage?.url || product.image_url || '';
+return `
+<div class="unlimited-recommendation-item" data-product-id="${product.id}">
+<input
+type="checkbox"
+class="unlimited-recommendation-checkbox"
+id="rec-${product.id}"
+data-product-id="${product.id}"
+data-product-name="${product.title}"
+>
+<label for="rec-${product.id}" class="unlimited-recommendation-label">
+${imageUrl ? `
+<img src="${imageUrl}" alt="${product.title}" class="unlimited-recommendation-image">
+` : `
+<div class="unlimited-recommendation-image unlimited-recommendation-placeholder">
+<span>No Image</span>
+</div>
+`}
+<div class="unlimited-recommendation-info">
+<div class="unlimited-recommendation-name">${product.title}</div>
+</div>
+</label>
+</div>
+`;
+}).join('')}
+</div>
+</div>
+` : ''}
+<div class="unlimited-customizer__actions">
+<button type="button" class="unlimited-buy-now btn btn-primary" disabled>
+Select All Options
+</button>
+<button type="button" class="unlimited-add-to-cart btn btn-secondary" disabled style="display: none;">
+Add to Cart (Preview)
+</button>
+</div>
+</div>
+`;
+container.innerHTML = html;
+attachEventListeners();
+initializeDefaultSelections();
+}
+function attachEventListeners() {
+const ringSizeSelect = container.querySelector('#ring-size-select');
+if (ringSizeSelect) {
+ringSizeSelect.addEventListener('change', function() {
+ringSize = this.value;
+});
+}
+const selects = container.querySelectorAll('.unlimited-option__select');
+selects.forEach(select => {
+select.addEventListener('change', function() {
+const attrId = this.dataset.attributeId;
+const valueId = this.value;
+if (valueId) {
+selectedOptions[attrId] = valueId;
+const attr = attributes.find(a => a.id === attrId);
+const value = attr?.values.find(v => v.id === valueId);
+const preview = this.closest('.unlimited-option').querySelector('.unlimited-option__preview');
+const previewImg = preview.querySelector('.unlimited-option__image');
+if (value?.image_url) {
+previewImg.src = value.image_url;
+previewImg.alt = value.value;
+preview.style.display = 'block';
+} else {
+preview.style.display = 'none';
+}
+} else {
+delete selectedOptions[attrId];
+}
+updateVariant();
+});
+});
+const recCheckboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+recCheckboxes.forEach(checkbox => {
+checkbox.addEventListener('change', function() {
+const productId = this.dataset.productId;
+const productName = this.dataset.productName;
+if (this.checked) {
+const allOptionsSelected = attributes.every(attr => {
+return selectedOptions[attr.id] !== undefined && selectedOptions[attr.id] !== null;
+});
+if (!allOptionsSelected) {
+this.checked = false;
+const missingOptions = attributes
+.filter(attr => !selectedOptions[attr.id])
+.map(attr => attr.name)
+.join(', ');
+alert(`⚠️ Please select all options for the main product first.\n\nMissing: ${missingOptions}\n\nThen you can add "${productName}" to your bundle.`);
+return;
+}
+selectedRecommendations.add(productId);
+} else {
+selectedRecommendations.delete(productId);
+}
+updateVariant();
+updateRecommendationPreview();
+});
+});
+function updateRecommendationPreview() {
+const previewContainer = container.querySelector('.unlimited-bundle-preview');
+if (selectedRecommendations.size === 0) {
+if (previewContainer) {
+previewContainer.style.display = 'none';
+}
+return;
+}
+if (!previewContainer) {
+const previewDiv = document.createElement('div');
+previewDiv.className = 'unlimited-bundle-preview';
+const actionsSection = container.querySelector('.unlimited-customizer__actions');
+actionsSection.parentNode.insertBefore(previewDiv, actionsSection);
+}
+const preview = container.querySelector('.unlimited-bundle-preview');
+const mainSelections = getMainProductSelections();
+let previewHTML = `
+<div class="unlimited-bundle-preview__title">Bundle Items (${selectedRecommendations.size + 1} products):</div>
+<div class="unlimited-bundle-preview__items">
+<div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--main">
+<strong>Main Product:</strong> Selected options will be added
+</div>
+`;
+selectedRecommendations.forEach(productId => {
+const cachedData = recommendationVariantsCache[productId];
+const recVariants = cachedData?.variants || [];
+const recommendation = recommendations.find(r => r.recommended_product.id === productId);
+const productName = recommendation?.recommended_product?.title || 'Recommended Product';
+if (recVariants.length === 0) {
+previewHTML += `
+<div class="unlimited-bundle-preview__item unlimited-bundle-preview__item--error">
+<strong>${productName}:</strong> <span class="unlimited-error">No variants available</span>
+</div>
+`;
+return;
+}
+const recAttributes = extractAttributes(recVariants);
+const preFilledSelections = {};
+const selectionDetails = [];
+recAttributes.forEach(attr => {
+if (recommendationUserSelections[productId] && recommendationUserSelections[productId][attr.id]) {
+preFilledSelections[attr.id] = recommendationUserSelections[productId][attr.id];
+const userValue = attr.values.find(v => v.id === recommendationUserSelections[productId][attr.id]);
+if (userValue) {
+selectionDetails.push({
+attrName: attr.name,
+value: userValue.value,
+matchType: 'user'
+});
+}
+return; 
+}
+const matchingMainSelection = Object.values(mainSelections).find(sel =>
+sel.attrName && attr.name &&
+sel.attrName.toLowerCase() === attr.name.toLowerCase()
+);
+let selectedValueText = '';
+let matchType = '';
+if (matchingMainSelection) {
+const matchedValueId = findMatchingValue(
+{ valueText: matchingMainSelection.valueText },
+attr.values
+);
+if (matchedValueId) {
+preFilledSelections[attr.id] = matchedValueId;
+const matchedValue = attr.values.find(v => v.id === matchedValueId);
+selectedValueText = matchedValue?.value || '';
+if (matchedValue?.value.toLowerCase() === matchingMainSelection.valueText.toLowerCase()) {
+matchType = 'exact';
+} else {
+matchType = 'nearest';
+}
+}
+} else {
+const defaultValue = attr.values.find(v => v.is_default);
+if (defaultValue) {
+preFilledSelections[attr.id] = defaultValue.id;
+selectedValueText = defaultValue.value;
+matchType = 'default';
+}
+}
+if (selectedValueText) {
+selectionDetails.push({
+attrName: attr.name,
+value: selectedValueText,
+matchType: matchType
+});
+}
+});
+const optionSelectorsHTML = recAttributes.map(attr => {
+const selectedValue = preFilledSelections[attr.id];
+const matchedDetail = selectionDetails.find(d => d.attrName === attr.name);
+return `
+<div class="unlimited-rec-option">
+<label class="unlimited-rec-option__label">${attr.name}:</label>
+<select
+class="unlimited-rec-option__select"
+data-product-id="${productId}"
+data-attribute-id="${attr.id}"
+>
+${attr.values.map(value => `
+<option
+value="${value.id}"
+${value.id === selectedValue ? 'selected' : ''}
+>
+${value.value}
+${value.id === selectedValue && matchedDetail?.matchType === 'exact' ? ' ✓' : ''}
+${value.id === selectedValue && matchedDetail?.matchType === 'nearest' ? ' ~' : ''}
+</option>
+`).join('')}
+</select>
+</div>
+`;
+}).join('');
+const matchedVariant = recVariants.find(variant => {
+return variant.variant_options?.every(opt =>
+preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+);
+});
+const variantPrice = matchedVariant?.price ? `$${matchedVariant.price}` : '';
+const priceDisplay = matchedVariant
+? `<div class="unlimited-bundle-price">Price: <strong>${variantPrice}</strong></div>`
+: '<div class="unlimited-bundle-price unlimited-bundle-price--error">Select valid combination to see price</div>';
+previewHTML += `
+<div class="unlimited-bundle-preview__item ${matchedVariant ? 'unlimited-bundle-preview__item--success' : 'unlimited-bundle-preview__item--warning'}">
+<div class="unlimited-bundle-item-header">
+<strong>${productName}</strong>
+<span class="unlimited-edit-badge">✏️ Editable</span>
+</div>
+${!matchedVariant ? '<div class="unlimited-warning-text">⚠️ Select valid option combination</div>' : '<div class="unlimited-success-text">✓ Valid selection</div>'}
+${priceDisplay}
+<div class="unlimited-bundle-preview__options unlimited-bundle-preview__options--editable">
+${optionSelectorsHTML}
+</div>
+</div>
+`;
+});
+previewHTML += `
+</div>
+<div class="unlimited-bundle-preview__note">
+<div class="unlimited-bundle-help-text">
+<strong>💡 How it works:</strong>
+<ul>
+<li>Options are <strong>automatically matched</strong> from your main product selection</li>
+<li>✓ = Exact match | ~ = Nearest match</li>
+<li><strong>You can change any option</strong> using the dropdowns before adding to cart</li>
+</ul>
+</div>
+</div>
+`;
+preview.innerHTML = previewHTML;
+preview.style.display = 'block';
+const recOptionSelects = preview.querySelectorAll('.unlimited-rec-option__select');
+recOptionSelects.forEach(select => {
+select.addEventListener('change', function() {
+const productId = this.dataset.productId;
+const attributeId = this.dataset.attributeId;
+const valueId = this.value;
+if (!recommendationUserSelections[productId]) {
+recommendationUserSelections[productId] = {};
+}
+recommendationUserSelections[productId][attributeId] = valueId;
+updateRecommendationPreview();
+});
+});
+}
+const buyNowBtn = container.querySelector('.unlimited-buy-now');
+buyNowBtn.addEventListener('click', buyNow);
+const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
+if (addToCartBtn) {
+addToCartBtn.addEventListener('click', addToCart);
+}
+}
+function initializeDefaultSelections() {
+if (!attributes || attributes.length === 0) {
+return;
+}
+updateVariant();
+}
+function updateVariant() {
+const variantInfo = container.querySelector('.unlimited-customizer__variant-info');
+const priceEl = container.querySelector('.unlimited-variant-price');
+const skuEl = container.querySelector('.unlimited-variant-sku');
+const buyNowBtn = container.querySelector('.unlimited-buy-now');
+const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
+const allSelected = attributes.every(attr => selectedOptions[attr.id]);
+if (allSelected) {
+const match = variants.find(variant => {
+return variant.variant_options?.every(opt =>
+selectedOptions[opt.attribute.id] === opt.attribute_value.id
+);
+});
+selectedVariant = match || null;
+if (selectedVariant) {
+variantInfo.style.display = 'block';
+let totalPrice = parseFloat(selectedVariant.price);
+if (selectedRecommendations.size > 0) {
+const mainSelections = getMainProductSelections();
+let recommendationsPriceTotal = 0;
+selectedRecommendations.forEach(productId => {
+const cachedData = recommendationVariantsCache[productId];
+const recVariants = cachedData?.variants || [];
+if (recVariants.length > 0) {
+const recAttributes = extractAttributes(recVariants);
+const preFilledSelections = {};
+recAttributes.forEach(attr => {
+const matchingMainSelection = Object.values(mainSelections).find(sel =>
+sel.attrName && attr.name &&
+sel.attrName.toLowerCase() === attr.name.toLowerCase()
+);
+if (matchingMainSelection) {
+const matchedValueId = findMatchingValue(
+{ valueText: matchingMainSelection.valueText },
+attr.values
+);
+if (matchedValueId) {
+preFilledSelections[attr.id] = matchedValueId;
+}
+} else {
+const defaultValue = attr.values.find(v => v.is_default);
+if (defaultValue) {
+preFilledSelections[attr.id] = defaultValue.id;
+}
+}
+});
+const matchedVariant = recVariants.find(variant => {
+return variant.variant_options?.every(opt =>
+preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+);
+});
+if (matchedVariant && matchedVariant.price) {
+recommendationsPriceTotal += parseFloat(matchedVariant.price);
+}
+}
+});
+totalPrice += recommendationsPriceTotal;
+priceEl.innerHTML = `
+<div style="display: flex; flex-direction: column; gap: 4px;">
+<div style="font-size: 24px; font-weight: 700; color: #008060;">
+Bundle Total: $${totalPrice.toFixed(2)}
+</div>
+<div style="font-size: 12px; color: #666;">
+Main: $${selectedVariant.price} + ${selectedRecommendations.size} item${selectedRecommendations.size > 1 ? 's' : ''}: $${recommendationsPriceTotal.toFixed(2)}
+</div>
+</div>
+`;
+} else {
+priceEl.innerHTML = `<strong>Price:</strong> $${selectedVariant.price}`;
+}
+if (selectedVariant.sku) {
+skuEl.innerHTML = `<strong>SKU:</strong> ${selectedVariant.sku}`;
+skuEl.style.display = 'block';
+}
+buyNowBtn.disabled = false;
+if (selectedRecommendations.size > 0) {
+buyNowBtn.textContent = 'Buy Bundle Now';
+} else {
+buyNowBtn.textContent = 'Buy Now';
+}
+if (addToCartBtn) {
+addToCartBtn.disabled = false;
+addToCartBtn.textContent = selectedRecommendations.size > 0 ? 'Add Bundle to Cart' : 'Add to Cart';
+}
+} else {
+variantInfo.style.display = 'none';
+buyNowBtn.disabled = true;
+buyNowBtn.textContent = 'Variant Not Available';
+if (addToCartBtn) {
+addToCartBtn.disabled = true;
+addToCartBtn.textContent = 'Variant Not Available';
+}
+}
+} else {
+variantInfo.style.display = 'block';
+priceEl.innerHTML = '<span style="font-style: italic; color: #6d7175;">Price shown after selections</span>';
+skuEl.style.display = 'none';
+buyNowBtn.disabled = true;
+buyNowBtn.textContent = 'Select All Options';
+if (addToCartBtn) {
+addToCartBtn.disabled = true;
+addToCartBtn.textContent = 'Select All Options';
+}
+}
+}
+function getMainProductSelections() {
+const selections = {};
+attributes.forEach(attr => {
+const valueId = selectedOptions[attr.id];
+if (valueId) {
+const value = attr.values.find(v => v.id === valueId);
+if (value) {
+selections[attr.id] = {
+valueId: valueId,
+attrName: attr.name,
+valueText: value.value
+};
+}
+}
+});
+return selections;
+}
+function findMatchingValue(mainSelection, availableValues) {
+if (!mainSelection || !availableValues || availableValues.length === 0) {
+return null;
+}
+const exactMatch = availableValues.find(v =>
+v.value.toLowerCase() === mainSelection.valueText.toLowerCase()
+);
+if (exactMatch) return exactMatch.id;
+const partialMatch = availableValues.find(v =>
+v.value.toLowerCase().includes(mainSelection.valueText.toLowerCase()) ||
+mainSelection.valueText.toLowerCase().includes(v.value.toLowerCase())
+);
+if (partialMatch) return partialMatch.id;
+const mainValue = parseFloat(mainSelection.valueText);
+if (!isNaN(mainValue)) {
+const numericValues = availableValues
+.map(v => ({ ...v, numeric: parseFloat(v.value) }))
+.filter(v => !isNaN(v.numeric));
+if (numericValues.length > 0) {
+const nearest = numericValues.reduce((prev, curr) =>
+Math.abs(curr.numeric - mainValue) < Math.abs(prev.numeric - mainValue) ? curr : prev
+);
+return nearest.id;
+}
+}
+const defaultValue = availableValues.find(v => v.is_default);
+return defaultValue?.id || null;
+}
+function extractAttributes(variants) {
+const uniqueAttrs = {};
+variants.forEach(variant => {
+variant.variant_options?.forEach(opt => {
+if (opt.attribute) {
+if (!uniqueAttrs[opt.attribute.id]) {
+uniqueAttrs[opt.attribute.id] = {
+...opt.attribute,
+values: []
+};
+}
+if (!uniqueAttrs[opt.attribute.id].values.find(v => v.id === opt.attribute_value.id)) {
+uniqueAttrs[opt.attribute.id].values.push(opt.attribute_value);
+}
+}
+});
+});
+return Object.values(uniqueAttrs);
+}
+async function addToCart() {
+if (!selectedVariant) return;
+const addToCartBtn = container.querySelector('.unlimited-add-to-cart');
+addToCartBtn.disabled = true;
+addToCartBtn.textContent = 'Adding...';
+try {
+const itemsToAdd = [];
+const apiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+variantId: selectedVariant.id,
+quantity: 1,
+ringSize: ringSize || null
+})
+});
+if (!apiResponse.ok) {
+const error = await apiResponse.json();
+throw new Error(error.error || 'Failed to prepare cart');
+}
+const apiData = await apiResponse.json();
+if (apiData.fallback && apiData.variant) {
+const productVariantId = {{ product.variants.first.id }};
+const properties = apiData.variant.properties || {
+'_Custom_Variant': 'Yes',
+'_Price': `$${apiData.variant.price}`
+};
+if (ringSize) {
+properties['Ring Size'] = ringSize;
+}
+itemsToAdd.push({
+id: productVariantId,
+quantity: 1,
+properties: properties
+});
+} else if (apiData.success && apiData.shopifyVariantId) {
+const itemToAdd = {
+id: apiData.shopifyVariantId,
+quantity: 1
+};
+if (ringSize) {
+itemToAdd.properties = {
+'Ring Size': ringSize
+};
+}
+itemsToAdd.push(itemToAdd);
+} else {
+throw new Error('Invalid API response format');
+}
+if (selectedRecommendations.size > 0) {
+const mainSelections = getMainProductSelections();
+const recommendationErrors = [];
+for (const productId of selectedRecommendations) {
+const cachedData = recommendationVariantsCache[productId];
+const recVariants = cachedData?.variants || [];
+if (recVariants.length === 0) {
+recommendationErrors.push(`Product ${productId} has no variants`);
+continue;
+}
+const recAttributes = extractAttributes(recVariants);
+const userSelections = {};
+const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+if (bundlePreview) {
+const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
+recSelects.forEach(select => {
+const attrId = select.dataset.attributeId;
+const valueId = select.value;
+if (attrId && valueId) {
+userSelections[attrId] = valueId;
+}
+});
+}
+const preFilledSelections = { ...userSelections };
+recAttributes.forEach(attr => {
+if (preFilledSelections[attr.id]) {
+return;
+}
+const matchingMainSelection = Object.values(mainSelections).find(sel =>
+sel.attrName && attr.name &&
+sel.attrName.toLowerCase() === attr.name.toLowerCase()
+);
+if (matchingMainSelection) {
+const matchedValueId = findMatchingValue(
+{ valueText: matchingMainSelection.valueText },
+attr.values
+);
+if (matchedValueId) {
+preFilledSelections[attr.id] = matchedValueId;
+}
+} else {
+const defaultValue = attr.values.find(v => v.is_default);
+if (defaultValue) {
+preFilledSelections[attr.id] = defaultValue.id;
+}
+}
+});
+const matchedVariant = recVariants.find(variant => {
+return variant.variant_options?.every(opt =>
+preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+);
+});
+if (matchedVariant) {
+try {
+const recApiResponse = await fetch(`${APP_URL}/api/cart/add-variant`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+variantId: matchedVariant.id,
+quantity: 1
+})
+});
+if (recApiResponse.ok) {
+const recApiData = await recApiResponse.json();
+if (recApiData.fallback && recApiData.variant) {
+const shopifyFallbackVariantId = cachedData?.shopifyFallbackVariantId;
+if (shopifyFallbackVariantId) {
+itemsToAdd.push({
+id: shopifyFallbackVariantId,
+quantity: 1,
+properties: recApiData.variant.properties || {}
+});
+} else {
+recommendationErrors.push(`No fallback variant for product ${productId}`);
+}
+} else if (recApiData.success && recApiData.shopifyVariantId) {
+itemsToAdd.push({
+id: recApiData.shopifyVariantId,
+quantity: 1
+});
+}
+} else {
+recommendationErrors.push(`API error for product ${productId}`);
+}
+} catch (err) {
+recommendationErrors.push(`Error adding product ${productId}: ${err.message}`);
+}
+} else {
+recommendationErrors.push(`No matching variant found for product ${productId}`);
+}
+}
+}
+const invalidItems = itemsToAdd.filter(item => !item.id || item.id === '0' || item.id === 0);
+if (invalidItems.length > 0) {
+throw new Error(`${invalidItems.length} items have invalid variant IDs`);
+}
+const response = await fetch('/cart/add.js', {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+},
+body: JSON.stringify({ items: itemsToAdd })
+});
+const cartResponseText = await response.text();
+let cartData;
+try {
+cartData = JSON.parse(cartResponseText);
+} catch (e) {
+throw new Error('Invalid cart response format');
+}
+if (!response.ok) {
+throw new Error(cartData.description || cartData.message || 'Failed to add to cart');
+}
+addToCartBtn.textContent = `✓ Added ${itemsToAdd.length} Item${itemsToAdd.length > 1 ? 's' : ''} to Cart`;
+selectedRecommendations.clear();
+const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+checkboxes.forEach(cb => cb.checked = false);
+const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+if (bundlePreview) {
+bundlePreview.style.display = 'none';
+}
+document.dispatchEvent(new CustomEvent('cart:updated'));
+document.dispatchEvent(new CustomEvent('cart:refresh'));
+if (typeof window.Shopify !== 'undefined') {
+if (window.Shopify.onCartUpdate) {
+window.Shopify.onCartUpdate();
+}
+}
+fetch('/cart.js')
+.then(r => r.json())
+.then(cart => {
+document.dispatchEvent(new CustomEvent('cart:change', { detail: cart }));
+})
+.catch(e => {});
+setTimeout(() => {
+addToCartBtn.textContent = 'Add to Cart';
+addToCartBtn.disabled = false;
+}, 2000);
+} catch (error) {
+addToCartBtn.textContent = 'Error - Try Again';
+alert(`Failed to add to cart: ${error.message}\n\nCheck console for details.`);
+setTimeout(() => {
+const hasRecommendations = selectedRecommendations.size > 0;
+addToCartBtn.textContent = hasRecommendations ? 'Add Bundle to Cart' : 'Add to Cart';
+addToCartBtn.disabled = false;
+}, 2000);
+}
+}
+async function buyNow() {
+if (!selectedVariant) return;
+const buyNowBtn = container.querySelector('.unlimited-buy-now');
+buyNowBtn.disabled = true;
+buyNowBtn.textContent = 'Creating checkout...';
+try {
+const itemsToProcess = [];
+itemsToProcess.push({
+variantId: selectedVariant.id,
+quantity: 1,
+ringSize: ringSize || null
+});
+if (selectedRecommendations.size > 0) {
+const mainSelections = getMainProductSelections();
+for (const productId of selectedRecommendations) {
+const cachedData = recommendationVariantsCache[productId];
+const recVariants = cachedData?.variants || [];
+if (recVariants.length === 0) {
+continue;
+}
+const recAttributes = extractAttributes(recVariants);
+const userSelections = {};
+const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+if (bundlePreview) {
+const recSelects = bundlePreview.querySelectorAll(`.unlimited-rec-option__select[data-product-id="${productId}"]`);
+recSelects.forEach(select => {
+const attrId = select.dataset.attributeId;
+const valueId = select.value;
+if (attrId && valueId) {
+userSelections[attrId] = valueId;
+}
+});
+}
+const preFilledSelections = { ...userSelections };
+recAttributes.forEach(attr => {
+if (preFilledSelections[attr.id]) {
+return;
+}
+const matchingMainSelection = Object.values(mainSelections).find(sel =>
+sel.attrName && attr.name &&
+sel.attrName.toLowerCase() === attr.name.toLowerCase()
+);
+if (matchingMainSelection) {
+const matchedValueId = findMatchingValue(
+{ valueText: matchingMainSelection.valueText },
+attr.values
+);
+if (matchedValueId) {
+preFilledSelections[attr.id] = matchedValueId;
+}
+} else {
+const defaultValue = attr.values.find(v => v.is_default);
+if (defaultValue) {
+preFilledSelections[attr.id] = defaultValue.id;
+}
+}
+});
+const matchedVariant = recVariants.find(variant => {
+return variant.variant_options?.every(opt =>
+preFilledSelections[opt.attribute.id] === opt.attribute_value.id
+);
+});
+if (matchedVariant) {
+itemsToProcess.push({
+variantId: matchedVariant.id,
+quantity: 1
+});
+}
+}
+}
+const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+},
+body: JSON.stringify({ items: itemsToProcess })
+});
+const data = await response.json();
+if (!response.ok) {
+throw new Error(data.error || data.message || 'Failed to create checkout');
+}
+if (!data.success || !data.checkoutUrl) {
+throw new Error('No checkout URL returned');
+}
+selectedRecommendations.clear();
+const checkboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+checkboxes.forEach(cb => cb.checked = false);
+const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+if (bundlePreview) {
+bundlePreview.style.display = 'none';
+}
+window.location.href = data.checkoutUrl;
+} catch (error) {
+buyNowBtn.textContent = 'Error - Try Again';
+alert(`Failed to create checkout: ${error.message}\n\nCheck console for details.`);
+setTimeout(() => {
+const hasRecommendations = selectedRecommendations.size > 0;
+buyNowBtn.textContent = hasRecommendations ? 'Buy Bundle Now' : 'Buy Now';
+buyNowBtn.disabled = false;
+}, 2000);
+}
+}
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', loadCustomizer);
+} else {
+loadCustomizer();
+}
 })();
-
-// Cart Checkout Interception for Custom Variants
 (function() {
-  async function interceptCheckout(event) {
-    try {
-      // Get current cart
-      const cartResponse = await fetch('/cart.js');
-      const cart = await cartResponse.json();
-
-      // Check if cart has custom variants (items with _custom_variant_id property)
-      const customItems = cart.items.filter(item =>
-        item.properties && item.properties._custom_variant_id
-      );
-
-      if (customItems.length === 0) {
-        return; // Allow normal checkout
-      }
-
-      // Prevent default checkout
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Show loading state
-      const button = event.target.closest('button, a, [type="submit"]');
-      const originalText = button ? button.textContent : '';
-      if (button) {
-        button.textContent = 'Creating checkout...';
-        button.disabled = true;
-      }
-
-      // Prepare items for create-checkout API
-      const items = customItems.map(item => ({
-        variantId: item.properties._custom_variant_id,
-        quantity: item.quantity
-      }));
-
-      // Call create-checkout API
-      const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to create checkout');
-      }
-
-      if (!data.checkoutUrl) {
-        throw new Error('No checkout URL returned');
-      }
-
-      // Redirect to Draft Order checkout
-      window.location.href = data.checkoutUrl;
-
-    } catch (error) {
-      alert(`Failed to create checkout: ${error.message}\n\nPlease try again or contact support.`);
-
-      // Restore button state
-      if (button) {
-        button.textContent = originalText;
-        button.disabled = false;
-      }
-    }
-  }
-
-  function setupCheckoutInterception() {
-    // Find all checkout buttons
-    const checkoutButtons = document.querySelectorAll(
-      'button[name="checkout"], ' +
-      'input[name="checkout"], ' +
-      '[href="/checkout"], ' +
-      '[href*="/checkouts/"], ' +
-      '.cart__checkout-button, ' +
-      '.cart-drawer__checkout, ' +
-      'button.checkout'
-    );
-
-    checkoutButtons.forEach(button => {
-      button.addEventListener('click', interceptCheckout, true); // Use capture phase
-    });
-  }
-
-  // Run on page load
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupCheckoutInterception);
-  } else {
-    setupCheckoutInterception();
-  }
-
-  // Also run when cart updates (for cart drawer themes)
-  document.addEventListener('cart:updated', setupCheckoutInterception);
-
-  // Run periodically to catch dynamically added buttons
-  setInterval(setupCheckoutInterception, 2000);
+async function interceptCheckout(event) {
+try {
+const cartResponse = await fetch('/cart.js');
+const cart = await cartResponse.json();
+const customItems = cart.items.filter(item =>
+item.properties && item.properties._custom_variant_id
+);
+if (customItems.length === 0) {
+return; 
+}
+event.preventDefault();
+event.stopPropagation();
+const button = event.target.closest('button, a, [type="submit"]');
+const originalText = button ? button.textContent : '';
+if (button) {
+button.textContent = 'Creating checkout...';
+button.disabled = true;
+}
+const items = customItems.map(item => ({
+variantId: item.properties._custom_variant_id,
+quantity: item.quantity
+}));
+const response = await fetch(`${APP_URL}/api/cart/create-checkout`, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+},
+body: JSON.stringify({ items })
+});
+const data = await response.json();
+if (!response.ok) {
+throw new Error(data.error || data.message || 'Failed to create checkout');
+}
+if (!data.checkoutUrl) {
+throw new Error('No checkout URL returned');
+}
+window.location.href = data.checkoutUrl;
+} catch (error) {
+alert(`Failed to create checkout: ${error.message}\n\nPlease try again or contact support.`);
+if (button) {
+button.textContent = originalText;
+button.disabled = false;
+}
+}
+}
+function setupCheckoutInterception() {
+const checkoutButtons = document.querySelectorAll(
+'button[name="checkout"], ' +
+'input[name="checkout"], ' +
+'[href="/checkout"], ' +
+'[href*="/checkouts/"], ' +
+'.cart__checkout-button, ' +
+'.cart-drawer__checkout, ' +
+'button.checkout'
+);
+checkoutButtons.forEach(button => {
+button.addEventListener('click', interceptCheckout, true); 
+});
+}
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', setupCheckoutInterception);
+} else {
+setupCheckoutInterception();
+}
+document.addEventListener('cart:updated', setupCheckoutInterception);
+setInterval(setupCheckoutInterception, 2000);
 })();
 </script>
-
 <style>
 .unlimited-customizer {
-  margin: 20px 0;
-  padding: 20px;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  background: #fff;
+margin: 20px 0;
+padding: 20px;
+border: 1px solid #e5e5e5;
+border-radius: 8px;
+background: #fff;
 }
-
 .unlimited-customizer__loading {
-  text-align: center;
-  padding: 40px 20px;
-  color: #666;
+text-align: center;
+padding: 40px 20px;
+color: #666;
 }
-
 .unlimited-customizer__title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: #333;
+font-size: 18px;
+font-weight: 600;
+margin-bottom: 16px;
+color: #333;
 }
-
 .unlimited-customizer__options {
-  margin-bottom: 20px;
+margin-bottom: 20px;
 }
-
 .unlimited-option {
-  margin-bottom: 16px;
+margin-bottom: 16px;
 }
-
 .unlimited-option__label {
-  display: block;
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 6px;
-  color: #333;
+display: block;
+font-weight: 600;
+font-size: 14px;
+margin-bottom: 6px;
+color: #333;
 }
-
 .unlimited-option__select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d1d1;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  cursor: pointer;
-  transition: border-color 0.2s;
+width: 100%;
+padding: 10px 12px;
+border: 1px solid #d1d1d1;
+border-radius: 6px;
+font-size: 14px;
+background: white;
+cursor: pointer;
+transition: border-color 0.2s;
 }
-
 .unlimited-option__select:hover {
-  border-color: #008060;
+border-color: #008060;
 }
-
 .unlimited-option__select:focus {
-  outline: none;
-  border-color: #008060;
-  box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
+outline: none;
+border-color: #008060;
+box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
 }
-
 .unlimited-option__preview {
-  margin-top: 10px;
-  padding: 10px;
-  background: #f9f9f9;
-  border-radius: 4px;
-  text-align: center;
+margin-top: 10px;
+padding: 10px;
+background: #f9f9f9;
+border-radius: 4px;
+text-align: center;
 }
-
 .unlimited-option__image {
-  max-width: 80px;
-  height: auto;
-  border-radius: 4px;
+max-width: 80px;
+height: auto;
+border-radius: 4px;
 }
-
 .unlimited-customizer__variant-info {
-  margin: 16px 0;
-  padding: 14px;
-  background: #f7faf9;
-  border-radius: 6px;
-  border: 1px solid #d4e9e3;
+margin: 16px 0;
+padding: 14px;
+background: #f7faf9;
+border-radius: 6px;
+border: 1px solid #d4e9e3;
 }
-
 .unlimited-variant-price {
-  font-size: 22px;
-  font-weight: 700;
-  color: #008060;
-  margin-bottom: 4px;
+font-size: 22px;
+font-weight: 700;
+color: #008060;
+margin-bottom: 4px;
 }
-
 .unlimited-variant-sku {
-  font-size: 12px;
-  color: #666;
+font-size: 12px;
+color: #666;
 }
-
 .unlimited-customizer__actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+display: flex;
+gap: 12px;
+align-items: center;
+flex-wrap: wrap;
 }
-
 .unlimited-buy-now {
-  flex: 1;
-  min-width: 200px;
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #008060;
-  color: white;
-  transition: background 0.2s;
+flex: 1;
+min-width: 200px;
+padding: 12px 24px;
+font-size: 15px;
+font-weight: 600;
+border: none;
+border-radius: 6px;
+cursor: pointer;
+background: #008060;
+color: white;
+transition: background 0.2s;
 }
-
 .unlimited-buy-now:hover:not(:disabled) {
-  background: #006e52;
+background: #006e52;
 }
-
 .unlimited-buy-now:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: #999;
+opacity: 0.5;
+cursor: not-allowed;
+background: #999;
 }
-
 .unlimited-add-to-cart {
-  flex: 0 0 auto;
-  padding: 12px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  border: 2px solid #008060;
-  border-radius: 4px;
-  cursor: pointer;
-  background: white;
-  color: #008060;
-  transition: all 0.2s;
+flex: 0 0 auto;
+padding: 12px 20px;
+font-size: 14px;
+font-weight: 500;
+border: 2px solid #008060;
+border-radius: 4px;
+cursor: pointer;
+background: white;
+color: #008060;
+transition: all 0.2s;
 }
-
 .unlimited-add-to-cart:hover:not(:disabled) {
-  background: #f0f7f5;
-  border-color: #006e52;
-  color: #006e52;
+background: #f0f7f5;
+border-color: #006e52;
+color: #006e52;
 }
-
 .unlimited-add-to-cart:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  border-color: #999;
-  color: #999;
+opacity: 0.6;
+cursor: not-allowed;
+border-color: #999;
+color: #999;
 }
-
 .spinner {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #008060;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+width: 40px;
+height: 40px;
+margin: 0 auto;
+border: 4px solid #f3f3f3;
+border-top: 4px solid #008060;
+border-radius: 50%;
+animation: spin 1s linear infinite;
 }
-
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
 }
-
-/* Recommendations Styles */
 .unlimited-recommendations {
-  margin: 20px 0;
-  padding: 16px;
-  background: #f9f9f9;
-  border-radius: 6px;
+margin: 20px 0;
+padding: 16px;
+background: #f9f9f9;
+border-radius: 6px;
 }
-
 .unlimited-recommendations__title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #333;
+font-size: 16px;
+font-weight: 600;
+margin-bottom: 12px;
+color: #333;
 }
-
 .unlimited-recommendations__grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+display: flex;
+flex-wrap: wrap;
+gap: 12px;
 }
-
 .unlimited-recommendation-item {
-  position: relative;
-  flex: 0 0 140px;
+position: relative;
+flex: 0 0 140px;
 }
-
 .unlimited-recommendation-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-  z-index: 10;
-  accent-color: #008060;
+position: absolute;
+top: 8px;
+left: 8px;
+width: 20px;
+height: 20px;
+cursor: pointer;
+z-index: 10;
+accent-color: #008060;
 }
-
 .unlimited-recommendation-label {
-  display: block;
-  cursor: pointer;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-  transition: border-color 0.2s;
-  background: white;
+display: block;
+cursor: pointer;
+border: 2px solid #e0e0e0;
+border-radius: 6px;
+overflow: hidden;
+transition: border-color 0.2s;
+background: white;
 }
-
 .unlimited-recommendation-label:hover {
-  border-color: #008060;
+border-color: #008060;
 }
-
 .unlimited-recommendation-item input:checked + .unlimited-recommendation-label {
-  border-color: #008060;
+border-color: #008060;
 }
-
 .unlimited-recommendation-image {
-  width: 140px;
-  height: 140px;
-  object-fit: cover;
-  display: block;
+width: 140px;
+height: 140px;
+object-fit: cover;
+display: block;
 }
-
 .unlimited-recommendation-placeholder {
-  width: 140px;
-  height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f0f0f0;
-  color: #999;
-  font-size: 11px;
+width: 140px;
+height: 140px;
+display: flex;
+align-items: center;
+justify-content: center;
+background: #f0f0f0;
+color: #999;
+font-size: 11px;
 }
-
 .unlimited-recommendation-info {
-  padding: 8px;
-  background: white;
+padding: 8px;
+background: white;
 }
-
 .unlimited-recommendation-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: #333;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+font-size: 12px;
+font-weight: 500;
+color: #333;
+line-height: 1.3;
+overflow: hidden;
+text-overflow: ellipsis;
+display: -webkit-box;
+-webkit-line-clamp: 2;
+-webkit-box-orient: vertical;
 }
-
 .unlimited-recommendation-price {
-  font-size: 13px;
-  font-weight: 600;
-  color: #008060;
-  margin-top: 4px;
+font-size: 13px;
+font-weight: 600;
+color: #008060;
+margin-top: 4px;
 }
-
-/* Bundle Preview Styles */
 .unlimited-bundle-preview {
-  margin: 16px 0;
-  padding: 14px;
-  background: #f0f7f4;
-  border: 2px solid #008060;
-  border-radius: 6px;
-  display: none;
+margin: 16px 0;
+padding: 14px;
+background: #f0f7f4;
+border: 2px solid #008060;
+border-radius: 6px;
+display: none;
 }
-
 .unlimited-bundle-preview__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #006e52;
-  margin-bottom: 10px;
+font-size: 15px;
+font-weight: 600;
+color: #006e52;
+margin-bottom: 10px;
 }
-
 .unlimited-bundle-preview__items {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+display: flex;
+flex-direction: column;
+gap: 10px;
 }
-
 .unlimited-bundle-preview__item {
-  padding: 10px;
-  background: white;
-  border-radius: 4px;
-  border-left: 3px solid #ddd;
+padding: 10px;
+background: white;
+border-radius: 4px;
+border-left: 3px solid #ddd;
 }
-
 .unlimited-bundle-preview__item--main {
-  border-left-color: #008060;
+border-left-color: #008060;
 }
-
 .unlimited-bundle-preview__item--success {
-  border-left-color: #28a745;
+border-left-color: #28a745;
 }
-
 .unlimited-bundle-preview__item--warning {
-  border-left-color: #ffc107;
-  background: #fffbf0;
+border-left-color: #ffc107;
+background: #fffbf0;
 }
-
 .unlimited-warning-text {
-  color: #856404;
-  font-size: 12px;
-  margin-top: 4px;
-  margin-bottom: 8px;
-  font-weight: 500;
+color: #856404;
+font-size: 12px;
+margin-top: 4px;
+margin-bottom: 8px;
+font-weight: 500;
 }
-
 .unlimited-bundle-preview__item--error {
-  border-left-color: #dc3545;
-  background: #fff5f5;
+border-left-color: #dc3545;
+background: #fff5f5;
 }
-
 .unlimited-bundle-preview__options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+margin-top: 6px;
 }
-
 .unlimited-bundle-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #495057;
+display: inline-flex;
+align-items: center;
+gap: 4px;
+padding: 4px 8px;
+background: #f8f9fa;
+border-radius: 4px;
+font-size: 12px;
+color: #495057;
 }
-
 .unlimited-match-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #28a745;
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 18px;
+height: 18px;
+border-radius: 50%;
+background: #28a745;
+color: white;
+font-size: 10px;
+font-weight: 600;
 }
-
 .unlimited-match-badge--nearest {
-  background: #ffc107;
-  color: #333;
+background: #ffc107;
+color: #333;
 }
-
 .unlimited-match-badge--default {
-  background: #6c757d;
-  color: white;
-  width: auto;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 9px;
+background: #6c757d;
+color: white;
+width: auto;
+padding: 2px 6px;
+border-radius: 10px;
+font-size: 9px;
 }
-
 .unlimited-error {
-  color: #dc3545;
-  font-weight: 500;
+color: #dc3545;
+font-weight: 500;
 }
-
 .unlimited-bundle-preview__note {
-  margin-top: 16px;
-  padding: 12px;
-  background: #e7f5f3;
-  border-radius: 6px;
-  border-left: 4px solid #008060;
+margin-top: 16px;
+padding: 12px;
+background: #e7f5f3;
+border-radius: 6px;
+border-left: 4px solid #008060;
 }
-
 .unlimited-bundle-help-text {
-  font-size: 12px;
-  color: #2c5f5a;
+font-size: 12px;
+color: #2c5f5a;
 }
-
 .unlimited-bundle-help-text strong {
-  color: #008060;
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
+color: #008060;
+display: block;
+margin-bottom: 8px;
+font-size: 13px;
 }
-
 .unlimited-bundle-help-text ul {
-  margin: 0;
-  padding-left: 20px;
+margin: 0;
+padding-left: 20px;
 }
-
 .unlimited-bundle-help-text li {
-  margin-bottom: 4px;
-  line-height: 1.5;
+margin-bottom: 4px;
+line-height: 1.5;
 }
-
 .unlimited-bundle-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 8px;
 }
-
 .unlimited-edit-badge {
-  background: #008060;
-  color: white;
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
+background: #008060;
+color: white;
+padding: 3px 8px;
+border-radius: 10px;
+font-size: 10px;
+font-weight: 600;
 }
-
 .unlimited-success-text {
-  color: #28a745;
-  font-size: 12px;
-  margin-bottom: 6px;
-  font-weight: 500;
+color: #28a745;
+font-size: 12px;
+margin-bottom: 6px;
+font-weight: 500;
 }
-
 .unlimited-bundle-price {
-  font-size: 14px;
-  color: #008060;
-  margin: 6px 0;
-  padding: 6px 10px;
-  background: #e7f5f3;
-  border-radius: 4px;
-  display: inline-block;
+font-size: 14px;
+color: #008060;
+margin: 6px 0;
+padding: 6px 10px;
+background: #e7f5f3;
+border-radius: 4px;
+display: inline-block;
 }
-
 .unlimited-bundle-price strong {
-  font-size: 16px;
-  font-weight: 700;
-  color: #004c3f;
+font-size: 16px;
+font-weight: 700;
+color: #004c3f;
 }
-
 .unlimited-bundle-price--error {
-  color: #856404;
-  background: #fff3cd;
-  font-size: 12px;
+color: #856404;
+background: #fff3cd;
+font-size: 12px;
 }
-
-/* Editable recommendation options */
 .unlimited-rec-option {
-  margin-bottom: 10px;
+margin-bottom: 10px;
 }
-
 .unlimited-rec-option__label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #495057;
+display: block;
+font-size: 12px;
+font-weight: 600;
+margin-bottom: 4px;
+color: #495057;
 }
-
 .unlimited-rec-option__select {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #d1d1d1;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  cursor: pointer;
-  transition: border-color 0.2s;
+width: 100%;
+padding: 8px 10px;
+border: 1px solid #d1d1d1;
+border-radius: 4px;
+font-size: 13px;
+background: white;
+cursor: pointer;
+transition: border-color 0.2s;
 }
-
 .unlimited-rec-option__select:hover {
-  border-color: #008060;
+border-color: #008060;
 }
-
 .unlimited-rec-option__select:focus {
-  outline: none;
-  border-color: #008060;
-  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.1);
+outline: none;
+border-color: #008060;
+box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.1);
 }
-
 .unlimited-bundle-preview__options--editable {
-  display: block;
-  margin-top: 8px;
-  padding: 10px;
-  background: #f9f9f9;
-  border-radius: 4px;
-  border: 1px dashed #ddd;
+display: block;
+margin-top: 8px;
+padding: 10px;
+background: #f9f9f9;
+border-radius: 4px;
+border: 1px dashed #ddd;
 }
-
 @media (max-width: 768px) {
-  .unlimited-recommendations__grid {
-    justify-content: center;
-  }
-
-  .unlimited-bundle-preview__options {
-    flex-direction: column;
-  }
+.unlimited-recommendations__grid {
+justify-content: center;
+}
+.unlimited-bundle-preview__options {
+flex-direction: column;
+}
 }
 </style>
-
 {% schema %}
 {
-  "name": "Product Customizer",
-  "target": "section",
-  "settings": []
+"name": "Product Customizer",
+"target": "section",
+"settings": []
 }
 {% endschema %}
