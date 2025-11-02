@@ -6,11 +6,13 @@ export default function Sidebar() {
   const router = useRouter();
 
   const isActive = (path) => {
+    if (path === '/dashboard') {
+      // Dashboard is active on /dashboard and /auth (entry page)
+      return router.pathname === '/dashboard' || router.pathname === '/auth';
+    }
     if (path === '/') {
-      // Products page can be accessed via /, /auth, or /products/*
-      return router.pathname === '/' ||
-             router.pathname === '/auth' ||
-             router.pathname.startsWith('/products');
+      // Products page can be accessed via / or /products/*
+      return router.pathname === '/' || router.pathname.startsWith('/products');
     }
     return router.pathname.startsWith(path);
   };
