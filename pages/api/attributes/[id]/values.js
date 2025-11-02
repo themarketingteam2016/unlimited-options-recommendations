@@ -20,17 +20,8 @@ export default async function handler(req, res) {
     }
   } else if (req.method === 'POST') {
     try {
-      const { value, imageUrl, isDefault } = req.body;
+      const { value, imageUrl } = req.body;
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-      // If setting as default, first unset any existing default for this attribute
-      if (isDefault) {
-        await supabaseAdmin
-          .from('attribute_values')
-          .update({ is_default: false })
-          .eq('attribute_id', id)
-          .eq('is_default', true);
-      }
 
       const { data, error } = await supabaseAdmin
         .from('attribute_values')
@@ -38,8 +29,7 @@ export default async function handler(req, res) {
           attribute_id: id,
           value,
           slug,
-          image_url: imageUrl || null,
-          is_default: isDefault || false
+          image_url: imageUrl || null
         }])
         .select()
         .single();

@@ -11,9 +11,9 @@ async function addVariantHandler(req, res) {
   }
 
   try {
-    const { variantId, quantity = 1 } = req.body;
+    const { variantId, quantity = 1, ringSize } = req.body;
 
-    console.log('[add-variant] Request received:', { variantId, quantity });
+    console.log('[add-variant] Request received:', { variantId, quantity, ringSize });
 
     if (!variantId) {
       console.error('[add-variant] Missing variantId');
@@ -120,6 +120,11 @@ async function addVariantHandler(req, res) {
 
     if (variant.sku) {
       properties['_SKU'] = variant.sku;
+    }
+
+    // Add Ring Size if provided
+    if (ringSize) {
+      properties['Ring Size'] = ringSize;
     }
 
     console.log('[add-variant] Built fallback cart data with properties:', properties);

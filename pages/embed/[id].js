@@ -16,6 +16,7 @@ export default function EmbedWidget() {
   const [selectedOptions, setSelectedOptions] = useState({});
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ringSize, setRingSize] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -46,14 +47,6 @@ export default function EmbedWidget() {
       console.log('Embed Widget - Variants Response:', variantsData);
       setVariants(Array.isArray(variantsData) ? variantsData : []);
 
-      // Fetch product-specific default values
-      const defaultsRes = await fetch(`/api/product-defaults?productId=${encodeURIComponent(id)}`);
-      let productDefaults = {};
-      if (defaultsRes.ok) {
-        productDefaults = await defaultsRes.json();
-        console.log('Embed Widget - Product-specific defaults loaded:', productDefaults);
-      }
-
       // Extract unique attributes
       if (variantsData && variantsData.length > 0) {
         const uniqueAttrs = {};
@@ -79,20 +72,6 @@ export default function EmbedWidget() {
         const extractedAttributes = Object.values(uniqueAttrs);
         console.log('Embed Widget - Extracted Attributes:', extractedAttributes);
         setAttributes(extractedAttributes);
-
-        // Pre-select default values (product-specific)
-        const defaultOptions = {};
-        extractedAttributes.forEach(attr => {
-          // Use product-specific default if available
-          const attrIdStr = String(attr.id);
-          if (productDefaults[attrIdStr]) {
-            defaultOptions[attr.id] = productDefaults[attrIdStr];
-          }
-        });
-        if (Object.keys(defaultOptions).length > 0) {
-          console.log('Embed Widget - Setting product-specific default options:', defaultOptions);
-          setSelectedOptions(defaultOptions);
-        }
       } else {
         console.log('Embed Widget - No variants data to extract attributes from');
       }
@@ -141,12 +120,14 @@ export default function EmbedWidget() {
         type: 'ADD_TO_CART',
         variant: selectedVariant,
         quantity: 1,
-        product: product
+        product: product,
+        ringSize: ringSize || null
       }, '*');
     }
 
     // Also trigger Shopify add to cart if available
-    alert(`Added ${product.title} to cart!\nVariant ID: ${selectedVariant.id}\nPrice: $${selectedVariant.price}`);
+    const ringSizeText = ringSize ? `\nRing Size: ${ringSize}` : '';
+    alert(`Added ${product.title} to cart!\nVariant ID: ${selectedVariant.id}\nPrice: $${selectedVariant.price}${ringSizeText}`);
   };
 
   if (loading) {
@@ -204,11 +185,31 @@ export default function EmbedWidget() {
           </div>
         )}
 
-        {selectedVariant && (
-          <div className={styles.priceSection}>
-            <div className={styles.price}>${selectedVariant.price}</div>
+        {product?.is_ring && (
+          <div className={styles.optionsSection}>
+            <div className={styles.optionGroup}>
+              <label className={styles.optionLabel}>Ring Size</label>
+              <select
+                className={styles.dropdown}
+                value={ringSize}
+                onChange={(e) => setRingSize(e.target.value)}
+              >
+                <option value="">Select Ring Size</option>
+                {[4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12].map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
+
+        <div className={styles.priceSection}>
+          {selectedVariant ? (
+            <div className={styles.price}>${selectedVariant.price}</div>
+          ) : (
+            <div className={styles.pricePlaceholder}>Price shown after selections</div>
+          )}
+        </div>
 
         <button
           className={styles.addToCartBtn}

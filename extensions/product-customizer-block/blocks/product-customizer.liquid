@@ -29,25 +29,21 @@
   let recommendationVariantsCache = {};
   let productDataCache = {};
   let recommendationUserSelections = {}; // Store user's manual selections for recommendations
-  let productDefaults = {}; // Store product-specific default values
+  let ringSize = ''; // Ring size selection (separate from variants)
+  let isRingProduct = false; // Track if this is a ring product
 
   // Fetch product customizer data
   async function loadCustomizer() {
     try {
+      // Fetch product data to check if it's a ring product
+      const productsRes = await fetch(`${APP_URL}/api/products`);
+      const productsData = await productsRes.json();
+      const productData = productsData.find(p => p.id === productId);
+      isRingProduct = productData?.is_ring || false;
+
       // Fetch variants from your API
       const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
       const variantsData = await variantsRes.json();
-
-      // Fetch product-specific default values
-      try {
-        const defaultsRes = await fetch(`${APP_URL}/api/product-defaults?productId=${encodeURIComponent(productId)}`);
-        if (defaultsRes.ok) {
-          productDefaults = await defaultsRes.json();
-          console.log('🎯 [Customizer] Product-specific defaults loaded:', productDefaults);
-        }
-      } catch (err) {
-        console.warn('⚠️ [Customizer] Could not load product-specific defaults:', err);
-      }
 
       if (!variantsData || variantsData.length === 0) {
         container.innerHTML = '<p>No custom options available for this product.</p>';
@@ -75,14 +71,6 @@
       });
 
       attributes = Object.values(uniqueAttrs);
-
-      console.log('\n📦 [Customizer] Loaded product attributes:', attributes.length);
-      attributes.forEach(attr => {
-        console.log(`\n   Attribute: ${attr.name}`);
-        attr.values.forEach(v => {
-          console.log(`      - ${v.value} ${v.is_default ? '⭐ (default)' : ''}`);
-        });
-      });
 
       // Load recommendations
       await loadRecommendations();
@@ -192,9 +180,9 @@
               </label>
 
               <select class="unlimited-option__select" data-attribute-id="${attr.id}">
+                <option value="">Select ${attr.name}</option>
                 ${attr.values.map(value => {
-                  const isDefault = value.is_default === true || value.is_default === 1 || value.is_default === '1' || value.is_default === 'true';
-                  return `<option value="${value.id}" ${isDefault ? 'selected' : ''}>${value.value}</option>`;
+                  return `<option value="${value.id}">${value.value}</option>`;
                 }).join('')}
               </select>
 
@@ -204,6 +192,18 @@
             </div>
           `).join('')}
         </div>
+
+        ${isRingProduct ? `
+          <div class="unlimited-option" style="margin-top: 1rem;">
+            <label class="unlimited-option__label">Ring Size</label>
+            <select class="unlimited-ring-size__select" id="ring-size-select">
+              <option value="">Select Ring Size</option>
+              ${[4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12].map(size =>
+                `<option value="${size}">${size}</option>`
+              ).join('')}
+            </select>
+          </div>
+        ` : ''}
 
         <div class="unlimited-customizer__variant-info" style="display: none;">
           <div class="unlimited-variant-price"></div>
@@ -265,6 +265,14 @@
   }
 
   function attachEventListeners() {
+    // Ring size change handler
+    const ringSizeSelect = container.querySelector('#ring-size-select');
+    if (ringSizeSelect) {
+      ringSizeSelect.addEventListener('change', function() {
+        ringSize = this.value;
+      });
+    }
+
     // Dropdown change handlers
     const selects = container.querySelectorAll('.unlimited-option__select');
     selects.forEach(select => {
@@ -528,8 +536,6 @@
           }
           recommendationUserSelections[productId][attributeId] = valueId;
 
-          console.log(`✏️ User changed ${productId} attribute ${attributeId} to ${valueId}`);
-
           // Trigger a re-render of the preview to show updated selections
           updateRecommendationPreview();
         });
@@ -548,67 +554,11 @@
   }
 
   function initializeDefaultSelections() {
-    console.log('==============================================');
-    console.log('🔧 DEFAULT OPTIONS INITIALIZATION STARTING');
-    console.log('==============================================');
-    console.log('[Default Selection] Total attributes to process:', attributes.length);
-
     if (!attributes || attributes.length === 0) {
-      console.error('❌ [Default Selection] No attributes available!');
       return;
     }
 
-    let defaultsFound = 0;
-
-    // Auto-select default values (product-specific)
-    attributes.forEach(attr => {
-      console.log(`\n📋 [Default Selection] Processing: "${attr.name}"`);
-      console.log(`   Available values count: ${attr.values.length}`);
-
-      // Check if this attribute has a product-specific default
-      const attrIdStr = String(attr.id);
-      const productSpecificDefaultId = productDefaults[attrIdStr];
-
-      let defaultValue = null;
-      if (productSpecificDefaultId) {
-        defaultValue = attr.values.find(v => String(v.id) === String(productSpecificDefaultId));
-        console.log(`   🎯 Product-specific default found: "${defaultValue?.value || 'NOT FOUND'}"`);
-      } else {
-        console.log(`   ℹ️  No product-specific default set for "${attr.name}"`);
-      }
-
-      if (defaultValue) {
-        selectedOptions[attr.id] = defaultValue.id;
-        defaultsFound++;
-        console.log(`   ✅ AUTO-SELECTED: "${defaultValue.value}" for "${attr.name}"`);
-
-        // Show image preview for default selection
-        const select = container.querySelector(`.unlimited-option__select[data-attribute-id="${attr.id}"]`);
-        if (select) {
-          // Also set the select element's value
-          select.value = defaultValue.id;
-
-          const preview = select.closest('.unlimited-option').querySelector('.unlimited-option__preview');
-          const previewImg = preview?.querySelector('.unlimited-option__image');
-
-          if (preview && previewImg && defaultValue.image_url) {
-            previewImg.src = defaultValue.image_url;
-            previewImg.alt = defaultValue.value;
-            preview.style.display = 'block';
-          }
-        }
-      } else {
-        console.warn(`   ⚠️  NO PRODUCT-SPECIFIC DEFAULT for "${attr.name}" - leaving unselected`);
-        // Don't auto-select anything if no product-specific default is set
-        // This ensures each product has independent defaults
-      }
-    });
-
-    console.log('\n==============================================');
-    console.log(`✨ DEFAULT SELECTION COMPLETE`);
-    console.log(`   Defaults found: ${defaultsFound} / ${attributes.length}`);
-    console.log(`   Selected options:`, selectedOptions);
-    console.log('==============================================\n');
+    // No default selections - user must make selections manually
 
     // Update variant info to show price and details
     updateVariant();
@@ -731,7 +681,11 @@
         }
       }
     } else {
-      variantInfo.style.display = 'none';
+      // Show price placeholder when no selections made
+      variantInfo.style.display = 'block';
+      priceEl.innerHTML = '<span style="font-style: italic; color: #6d7175;">Price shown after selections</span>';
+      skuEl.style.display = 'none';
+
       buyNowBtn.disabled = true;
       buyNowBtn.textContent = 'Select All Options';
       if (addToCartBtn) {
@@ -840,7 +794,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           variantId: selectedVariant.id,
-          quantity: 1
+          quantity: 1,
+          ringSize: ringSize || null
         })
       });
 
@@ -861,6 +816,11 @@
           '_Price': `$${apiData.variant.price}`
         };
 
+        // Add Ring Size if selected
+        if (ringSize) {
+          properties['Ring Size'] = ringSize;
+        }
+
         itemsToAdd.push({
           id: productVariantId,
           quantity: 1,
@@ -868,10 +828,19 @@
         });
       } else if (apiData.success && apiData.shopifyVariantId) {
         // Direct Shopify variant (if synced)
-        itemsToAdd.push({
+        const itemToAdd = {
           id: apiData.shopifyVariantId,
           quantity: 1
-        });
+        };
+
+        // Add Ring Size if selected
+        if (ringSize) {
+          itemToAdd.properties = {
+            'Ring Size': ringSize
+          };
+        }
+
+        itemsToAdd.push(itemToAdd);
       } else {
         throw new Error('Invalid API response format');
       }
@@ -1088,7 +1057,8 @@
       // Add main product
       itemsToProcess.push({
         variantId: selectedVariant.id,
-        quantity: 1
+        quantity: 1,
+        ringSize: ringSize || null
       });
 
       // Handle recommendations with smart pre-fill if any selected
@@ -1821,3 +1791,11 @@
   }
 }
 </style>
+
+{% schema %}
+{
+  "name": "Product Customizer",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

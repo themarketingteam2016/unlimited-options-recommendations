@@ -18,7 +18,6 @@ export default async function handler(req, res) {
             value,
             slug,
             image_url,
-            is_default,
             display_order
           )
         `)

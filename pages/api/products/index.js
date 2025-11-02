@@ -56,7 +56,28 @@ async function productsHandler(req, res) {
           });
       }
 
-      res.status(200).json(shopifyProducts);
+      // Fetch additional data from Supabase (like is_ring)
+      const { data: supabaseProducts, error: supabaseError } = await supabaseAdmin
+        .from('products')
+        .select('id, shopify_product_id, is_ring');
+
+      if (supabaseError) {
+        console.error('Error fetching from Supabase:', supabaseError);
+      }
+
+      // Merge Supabase data with Shopify products
+      const enrichedProducts = shopifyProducts.map(shopifyProduct => {
+        const supabaseProduct = supabaseProducts?.find(
+          sp => sp.shopify_product_id === shopifyProduct.id
+        );
+        return {
+          ...shopifyProduct,
+          id: supabaseProduct?.id || shopifyProduct.id,
+          is_ring: supabaseProduct?.is_ring || false
+        };
+      });
+
+      res.status(200).json(enrichedProducts);
     } catch (error) {
       console.error('Failed to fetch products:', error);
       res.status(500).json({ error: error.message });

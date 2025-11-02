@@ -109,6 +109,13 @@
   color: #008060;
 }
 
+.pricePlaceholder {
+  font-size: 16px;
+  font-weight: 500;
+  color: #6d7175;
+  font-style: italic;
+}
+
 .stock {
   font-size: 13px;
   color: #6d7175;

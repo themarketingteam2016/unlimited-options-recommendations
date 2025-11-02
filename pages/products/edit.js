@@ -10,6 +10,7 @@ export default function ProductEdit() {
   const { productId } = router.query;
 
   const [product, setProduct] = useState(null);
+  const [isRing, setIsRing] = useState(false);
   const [attributes, setAttributes] = useState([]);
   const [selectedAttributes, setSelectedAttributes] = useState({});
   const [selectedValues, setSelectedValues] = useState({});
@@ -32,7 +33,6 @@ export default function ProductEdit() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('attributes');
-  const [defaultValues, setDefaultValues] = useState({});
 
   useEffect(() => {
     if (productId) {
@@ -75,19 +75,6 @@ export default function ProductEdit() {
 
       setAttributes(Array.isArray(attrsData) ? attrsData : []);
 
-      // Load product-specific default values from product_attributes table
-      const defaultsRes = await fetch(`/api/product-defaults?productId=${encodeURIComponent(productId)}`);
-      const productDefaults = await defaultsRes.json();
-      console.log('Product-specific default values loaded:', productDefaults);
-
-      // Convert to string keys for consistency
-      const defaultVals = {};
-      Object.keys(productDefaults).forEach(attrId => {
-        defaultVals[String(attrId)] = String(productDefaults[attrId]);
-      });
-
-      setDefaultValues(defaultVals);
-
       // Fetch all products
       const productsRes = await fetch('/api/products');
       const productsData = await productsRes.json();
@@ -95,6 +82,7 @@ export default function ProductEdit() {
 
       const foundProduct = productsData.find(p => p.id === productId);
       setProduct(foundProduct);
+      setIsRing(foundProduct?.is_ring || false);
 
       // Fetch existing recommendations using query params
       const recsRes = await fetch(`/api/recommendations?productId=${encodeURIComponent(productId)}`);
@@ -639,72 +627,6 @@ export default function ProductEdit() {
     reader.readAsDataURL(file);
   };
 
-  const handleToggleDefault = async (attributeId, valueId) => {
-    try {
-      // Ensure string conversion for consistent comparison
-      const attrIdStr = String(attributeId);
-      const valueIdStr = String(valueId);
-
-      // Find the attribute value to get its current name
-      const attr = attributes.find(a => String(a.id) === attrIdStr);
-      const value = attr?.attribute_values?.find(v => String(v.id) === valueIdStr);
-
-      if (!value) {
-        console.error('Value not found for', valueId);
-        return;
-      }
-
-      // Check if this value is already default (with string comparison)
-      const isCurrentlyDefault = defaultValues[attrIdStr] === valueIdStr;
-
-      console.log('Toggling product-specific default:', {
-        productId,
-        attributeId: attrIdStr,
-        valueId: valueIdStr,
-        currentValue: value.value,
-        currentDefaultValues: defaultValues,
-        isCurrentlyDefault,
-        newDefaultState: !isCurrentlyDefault
-      });
-
-      // Prepare the new default value for this attribute
-      const newDefaults = {
-        ...defaultValues,
-        [attrIdStr]: isCurrentlyDefault ? null : valueIdStr
-      };
-
-      // Save product-specific default
-      const res = await fetch(`/api/product-defaults?productId=${encodeURIComponent(productId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          defaults: {
-            [attrIdStr]: isCurrentlyDefault ? null : valueIdStr
-          }
-        })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update default');
-      }
-
-      console.log('Product-specific default updated successfully');
-
-      // Update local state
-      setDefaultValues(newDefaults);
-
-      setMessage({
-        type: 'success',
-        text: isCurrentlyDefault ? 'Default removed for this product' : 'Set as default for this product!'
-      });
-      setTimeout(() => setMessage(null), 2000);
-    } catch (error) {
-      console.error('Toggle default error:', error);
-      setMessage({ type: 'error', text: `Failed to update: ${error.message}` });
-      setTimeout(() => setMessage(null), 3000);
-    }
-  };
 
   const handleSaveRecommendations = async () => {
     try {
@@ -773,6 +695,43 @@ export default function ProductEdit() {
               ← Back to Products
             </Link>
             <h1>{product.title}</h1>
+
+            {/* Is Ring Checkbox */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={isRing}
+                  onChange={async (e) => {
+                    const newValue = e.target.checked;
+                    setIsRing(newValue);
+
+                    // Save to database
+                    try {
+                      const res = await fetch(`/api/products/${encodeURIComponent(productId)}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ is_ring: newValue })
+                      });
+
+                      if (!res.ok) {
+                        throw new Error('Failed to update is_ring');
+                      }
+
+                      setMessage({ type: 'success', text: newValue ? 'Marked as ring product' : 'Unmarked as ring product' });
+                      setTimeout(() => setMessage(null), 2000);
+                    } catch (error) {
+                      console.error('Error updating is_ring:', error);
+                      setMessage({ type: 'error', text: 'Failed to update ring status' });
+                      setTimeout(() => setMessage(null), 3000);
+                      setIsRing(!newValue); // Revert on error
+                    }
+                  }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: '500' }}>This is a ring product (requires Ring Size)</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -804,6 +763,26 @@ export default function ProductEdit() {
           <h2>Attributes & Values</h2>
           <p className={styles.subtitle}>Select attributes and their values to create product variations</p>
 
+          {isRing && (
+            <div className={styles.section} style={{ marginBottom: '2rem', background: '#f9fafb', padding: '1.5rem', borderRadius: '8px' }}>
+              <h3 style={{ marginBottom: '0.5rem', color: '#202223' }}>Ring Size Selection</h3>
+              <p style={{ fontSize: '14px', color: '#6d7175', marginBottom: '1rem' }}>
+                This field will be collected from customers but does not affect pricing or product variations.
+              </p>
+              <div style={{ maxWidth: '300px' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                  Available Ring Sizes
+                </label>
+                <div style={{ color: '#6d7175', fontSize: '14px', padding: '0.75rem', background: 'white', border: '1px solid #d1d1d1', borderRadius: '4px' }}>
+                  4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12
+                </div>
+                <p style={{ fontSize: '13px', color: '#6d7175', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  Ring size will be collected at checkout and stored with the order.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className={styles.attributesGrid}>
             {attributes.map(attr => {
               const attrIdStr = String(attr.id);
@@ -824,7 +803,6 @@ export default function ProductEdit() {
                       const valIdStr = String(val.id);
                       const attrIdStr = String(attr.id);
                       const isSelected = selectedValues[attrIdStr]?.includes(valIdStr) || false;
-                      const isDefault = String(defaultValues[attrIdStr]) === valIdStr;
 
                       return (
                         <div
@@ -848,24 +826,6 @@ export default function ProductEdit() {
                                 {isSelected && <span style={{ marginLeft: '6px', color: '#008060' }}>✓</span>}
                               </span>
                             </label>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleDefault(attr.id, val.id);
-                              }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '20px',
-                                padding: '0 4px',
-                                color: '#ffd700',
-                                transition: 'all 0.2s'
-                              }}
-                              title={isDefault ? 'Remove as default for this product' : 'Set as default for this product'}
-                            >
-                              {isDefault ? '★' : '☆'}
-                            </button>
                           </div>
 
                           {/* Image upload section - always visible */}
@@ -1192,14 +1152,11 @@ export default function ProductEdit() {
                           selectedValuesForAttr.includes(String(val.id))
                         ) || [];
 
-                        // Get default value for this attribute
-                        const defaultValueId = defaultValues[attrIdStr] || '';
-
                         return (
                           <div key={attrId} className={styles.formGroup}>
                             <label>{attr.name}</label>
                             <select
-                              value={manualVariant[attrId] || defaultValueId}
+                              value={manualVariant[attrId] || ''}
                               onChange={(e) => setManualVariant({ ...manualVariant, [attrId]: e.target.value })}
                               className={styles.formSelect}
                             >

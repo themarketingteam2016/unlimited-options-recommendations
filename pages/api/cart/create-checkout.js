@@ -10,7 +10,7 @@ async function createCheckoutHandler(req, res) {
   }
 
   try {
-    const { items } = req.body; // Array of {variantId, quantity}
+    const { items } = req.body; // Array of {variantId, quantity, ringSize (optional)}
 
     console.log('[create-checkout] Request received:', { itemCount: items?.length, items });
 
@@ -143,6 +143,14 @@ async function createCheckoutHandler(req, res) {
         properties.push({
           name: 'SKU',
           value: variant.sku
+        });
+      }
+
+      // Add Ring Size if provided for this item
+      if (item.ringSize) {
+        properties.push({
+          name: 'Ring Size',
+          value: item.ringSize
         });
       }
 
