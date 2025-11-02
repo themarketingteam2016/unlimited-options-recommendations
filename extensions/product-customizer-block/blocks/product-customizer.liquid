@@ -36,15 +36,20 @@
   // Fetch product customizer data
   async function loadCustomizer() {
     try {
-      // Fetch product data to check if it's a ring product
-      const productsRes = await fetch(`${APP_URL}/api/products`);
-      const productsData = await productsRes.json();
-      const productData = productsData.find(p => p.id === productId);
-      isRingProduct = productData?.is_ring || false;
+      // Fetch product data to check if it's a ring product (using public endpoint)
+      try {
+        const productInfoRes = await fetch(`${APP_URL}/api/storefront/product-info?productId=${encodeURIComponent(productId)}`);
+        if (productInfoRes.ok) {
+          const productData = await productInfoRes.json();
+          isRingProduct = productData?.is_ring || false;
 
-      // Get custom ring sizes or use defaults
-      if (isRingProduct) {
-        availableRingSizes = productData?.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
+          // Get custom ring sizes or use defaults
+          if (isRingProduct) {
+            availableRingSizes = productData?.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
+          }
+        }
+      } catch (e) {
+        console.log('Could not fetch ring size info:', e);
       }
 
       // Fetch variants from your API
