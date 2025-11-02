@@ -39,7 +39,7 @@
       // Fetch product data to check if it's a ring product
       const productsRes = await fetch(`${APP_URL}/api/products`);
       const productsData = await productsRes.json();
-      const productData = productsData.find(p => p.id === productId);
+      const productData = productsData.find(p => p.shopify_product_id === productId);
       isRingProduct = productData?.is_ring || false;
 
       // Get custom ring sizes or use defaults

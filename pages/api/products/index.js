@@ -73,6 +73,7 @@ async function productsHandler(req, res) {
         return {
           ...shopifyProduct,
           id: supabaseProduct?.id || shopifyProduct.id,
+          shopify_product_id: shopifyProduct.id, // Keep Shopify product ID for matching
           is_ring: supabaseProduct?.is_ring || false,
           ring_sizes: supabaseProduct?.ring_sizes || null
         };
