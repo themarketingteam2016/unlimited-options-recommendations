@@ -20,6 +20,7 @@ export default function Home() {
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const productsPerPage = 12;
 
   useEffect(() => {
@@ -265,32 +266,73 @@ export default function Home() {
 
         {!selectedProduct ? (
           <>
-            <div className={styles.header}>
-              <h2>Select a Product</h2>
-              {products.length > 0 && (
-                <div style={{ marginTop: '16px', marginBottom: '24px' }}>
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+            {products.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="🔍 Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    flex: '1',
+                    minWidth: '250px',
+                    maxWidth: '400px',
+                    padding: '12px 16px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.3s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#008060'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                />
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#718096', marginRight: '8px' }}>
+                    {currentProducts.length} of {filteredProducts.length}
+                  </span>
+                  <button
+                    onClick={() => setViewMode('grid')}
                     style={{
-                      width: '100%',
-                      maxWidth: '400px',
-                      padding: '12px 16px',
-                      border: '2px solid #e0e0e0',
+                      padding: '10px 16px',
+                      background: viewMode === 'grid' ? 'linear-gradient(135deg, #008060 0%, #006e52 100%)' : 'white',
+                      color: viewMode === 'grid' ? 'white' : '#4a5568',
+                      border: viewMode === 'grid' ? 'none' : '2px solid #e2e8f0',
                       borderRadius: '8px',
-                      fontSize: '14px',
-                      outline: 'none'
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      transition: 'all 0.3s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
                     }}
-                  />
-                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-                    Showing {currentProducts.length} of {filteredProducts.length} products
-                    {searchTerm && ` (filtered from ${products.length} total)`}
-                  </p>
+                    title="Grid View"
+                  >
+                    ▦
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    style={{
+                      padding: '10px 16px',
+                      background: viewMode === 'list' ? 'linear-gradient(135deg, #008060 0%, #006e52 100%)' : 'white',
+                      color: viewMode === 'list' ? 'white' : '#4a5568',
+                      border: viewMode === 'list' ? 'none' : '2px solid #e2e8f0',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      transition: 'all 0.3s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                    title="List View"
+                  >
+                    ☰
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             {products.length === 0 ? (
               <div className={styles.emptyState}>
                 <p>No products found. Make sure your Shopify store has products.</p>
@@ -308,17 +350,19 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <div className={styles.productGrid}>
+                <div className={viewMode === 'grid' ? styles.productGrid : styles.productList}>
                   {currentProducts.map(product => (
                     <div
                       key={product.id}
-                      className={styles.productCard}
+                      className={viewMode === 'grid' ? styles.productCard : styles.productListItem}
                     >
                       {product.featuredImage && (
-                        <img src={product.featuredImage.url} alt={product.title} className={styles.productImage} />
+                        <img src={product.featuredImage.url} alt={product.title} className={viewMode === 'grid' ? styles.productImage : styles.productListImage} />
                       )}
-                      <h3>{product.title}</h3>
-                      <p className={styles.productStatus}>{product.status}</p>
+                      <div className={viewMode === 'list' ? styles.productListContent : ''}>
+                        <h3>{product.title}</h3>
+                        <p className={styles.productStatus}>{product.status}</p>
+                      </div>
                       <Link
                         href={`/products/edit?productId=${encodeURIComponent(product.id)}&shop=${shop}${router.query.host ? `&host=${router.query.host}` : ''}`}
                         className={styles.editButton}
