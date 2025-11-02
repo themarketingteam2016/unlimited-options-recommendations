@@ -215,15 +215,25 @@ export default function Attributes() {
 
         {showForm && (
           <form onSubmit={handleSubmit} className={styles.form}>
+            <div className={styles.formHeader}>
+              <h3>{editingAttribute ? 'Edit Attribute' : 'Create New Attribute'}</h3>
+              <p className={styles.formDescription}>
+                {editingAttribute
+                  ? 'Update the attribute name and settings'
+                  : 'Attributes are product options like Size, Color, or Material that customers can choose from'
+                }
+              </p>
+            </div>
             <div className={styles.inputGroup}>
-              <label>Attribute Name</label>
+              <label>What type of option is this?</label>
               <input
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Color, Size, Material"
+                placeholder="e.g., Size, Color, Material, Style"
                 required
               />
+              <span className={styles.inputHint}>This will be shown to customers when they select options</span>
             </div>
             <div className={styles.checkboxGroup}>
               <label>
@@ -232,97 +242,178 @@ export default function Attributes() {
                   checked={formData.isPrimary}
                   onChange={(e) => setFormData({ ...formData, isPrimary: e.target.checked })}
                 />
-                Set as Primary Option (for recommendations)
+                <div>
+                  <strong>Set as primary attribute</strong>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#6d7175' }}>
+                    The primary attribute is used for product recommendations (usually Size or Color)
+                  </p>
+                </div>
               </label>
             </div>
-            <button type="submit" className={styles.btnPrimary}>
-              {editingAttribute ? 'Update' : 'Create'} Attribute
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="submit" className={styles.btnPrimary}>
+                {editingAttribute ? '✓ Update Attribute' : '+ Create Attribute'}
+              </button>
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingAttribute(null);
+                  setFormData({ name: '', isPrimary: false });
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         )}
 
         <div className={styles.attributesList}>
           {attributes.length === 0 ? (
-            <p className={styles.emptyState}>No attributes yet. Create one to get started!</p>
+            <div className={styles.emptyStateCard}>
+              <div className={styles.emptyStateIcon}>🏷️</div>
+              <h3>No attributes yet</h3>
+              <p>Attributes are options like Size, Color, or Material that customers can choose for your products.</p>
+              <button
+                className={styles.btnPrimary}
+                onClick={() => {
+                  setShowForm(true);
+                  setEditingAttribute(null);
+                  setFormData({ name: '', isPrimary: false });
+                }}
+              >
+                Create Your First Attribute
+              </button>
+            </div>
           ) : (
             attributes.map(attr => (
               <div key={attr.id} className={styles.attributeCard}>
                 <div className={styles.attributeHeader}>
-                  <div>
+                  <div className={styles.attributeTitleRow}>
                     <h3>{attr.name}</h3>
-                    {attr.is_primary && <span className={styles.primaryBadge}>Primary</span>}
+                    {attr.is_primary && (
+                      <span className={styles.primaryBadge} title="This is the main option for product recommendations">
+                        ⭐ Primary
+                      </span>
+                    )}
+                    <span className={styles.valueCount}>
+                      {attr.attribute_values?.length || 0} {attr.attribute_values?.length === 1 ? 'option' : 'options'}
+                    </span>
                   </div>
                   <div className={styles.actions}>
-                    <button onClick={() => setExpandedAttribute(expandedAttribute === attr.id ? null : attr.id)} className={styles.btnSecondary}>
-                      {expandedAttribute === attr.id ? 'Collapse' : 'Manage Values'}
+                    <button onClick={() => editAttribute(attr)} className={styles.btnEdit} title="Edit attribute name">
+                      ✏️ Edit
                     </button>
-                    <button onClick={() => editAttribute(attr)} className={styles.btnSecondary}>Edit</button>
-                    <button onClick={() => handleDelete(attr.id)} className={styles.btnDanger}>Delete</button>
+                    <button onClick={() => handleDelete(attr.id)} className={styles.btnDanger} title="Delete this attribute">
+                      🗑️ Delete
+                    </button>
                   </div>
                 </div>
 
-                {expandedAttribute === attr.id && (
-                  <div className={styles.valuesSection}>
-                    <div className={styles.valuesHeader}>
-                      <h4>Values</h4>
-                      <button
-                        onClick={() => setBulkMode({ ...bulkMode, [attr.id]: !bulkMode[attr.id] })}
-                        className={styles.btnSecondary}
-                      >
-                        {bulkMode[attr.id] ? 'Single Mode' : 'Bulk Add'}
-                      </button>
+                <div className={styles.valuesSection}>
+                  {/* Quick Add Form - Always Visible */}
+                  <div className={styles.quickAddSection}>
+                    <h4>Add New Option</h4>
+                    <div className={styles.addValueForm}>
+                      <input
+                        type="text"
+                        placeholder={`e.g., ${attr.name === 'Size' ? 'Small, Medium, Large' : attr.name === 'Color' ? 'Red, Blue, Green' : 'Option name'}`}
+                        value={newValue.value}
+                        onChange={(e) => setNewValue({ value: e.target.value })}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddValue(attr.id);
+                          }
+                        }}
+                      />
+                      <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>+ Add</button>
                     </div>
+                    {!bulkMode[attr.id] && (
+                      <button
+                        onClick={() => setBulkMode({ ...bulkMode, [attr.id]: true })}
+                        className={styles.linkButton}
+                      >
+                        Or add multiple options at once
+                      </button>
+                    )}
+                  </div>
 
-                    {bulkMode[attr.id] ? (
-                      <div className={styles.bulkValueForm}>
-                        <textarea
-                          placeholder="Enter values (one per line or comma-separated)&#10;Example:&#10;Small&#10;Medium&#10;Large&#10;&#10;Or: Small, Medium, Large"
-                          value={bulkValues}
-                          onChange={(e) => setBulkValues(e.target.value)}
-                          rows={6}
-                          className={styles.bulkTextarea}
-                        />
+                  {/* Bulk Add Form - Show when activated */}
+                  {bulkMode[attr.id] && (
+                    <div className={styles.bulkValueForm}>
+                      <h4>Add Multiple Options</h4>
+                      <p className={styles.helpText}>Enter multiple options separated by commas or one per line</p>
+                      <textarea
+                        placeholder="Small, Medium, Large&#10;or&#10;Small&#10;Medium&#10;Large"
+                        value={bulkValues}
+                        onChange={(e) => setBulkValues(e.target.value)}
+                        rows={4}
+                        className={styles.bulkTextarea}
+                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
                         <button onClick={() => handleBulkAddValues(attr.id)} className={styles.btnPrimary}>
-                          Add All Values
+                          Add All Options
+                        </button>
+                        <button
+                          onClick={() => {
+                            setBulkMode({ ...bulkMode, [attr.id]: false });
+                            setBulkValues('');
+                          }}
+                          className={styles.btnSecondary}
+                        >
+                          Cancel
                         </button>
                       </div>
-                    ) : (
-                      <div className={styles.addValueForm}>
-                        <input
-                          type="text"
-                          placeholder="Value name"
-                          value={newValue.value}
-                          onChange={(e) => setNewValue({ value: e.target.value })}
-                        />
-                        <button onClick={() => handleAddValue(attr.id)} className={styles.btnPrimary}>Add Value</button>
-                      </div>
-                    )}
-
-                    <div className={styles.valuesList}>
-                      {attr.attribute_values?.map(val => (
-                        <div key={val.id} className={styles.valueItem}>
-                          {editingValue?.id === val.id ? (
-                            <>
-                              <input
-                                type="text"
-                                value={editingValue.value}
-                                onChange={(e) => setEditingValue({ ...editingValue, value: e.target.value })}
-                              />
-                              <button onClick={handleUpdateValue} className={styles.btnPrimary}>Save</button>
-                              <button onClick={() => setEditingValue(null)} className={styles.btnSecondary}>Cancel</button>
-                            </>
-                          ) : (
-                            <>
-                              <span>{val.value}</span>
-                              <button onClick={() => setEditingValue(val)} className={styles.btnEdit}>Edit</button>
-                              <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDelete}>×</button>
-                            </>
-                          )}
-                        </div>
-                      ))}
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {/* Existing Values List */}
+                  {attr.attribute_values && attr.attribute_values.length > 0 && (
+                    <div className={styles.existingValuesSection}>
+                      <h4>Current Options ({attr.attribute_values.length})</h4>
+                      <div className={styles.valuesList}>
+                        {attr.attribute_values.map(val => (
+                          <div key={val.id} className={styles.valueItem}>
+                            {editingValue?.id === val.id ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={editingValue.value}
+                                  onChange={(e) => setEditingValue({ ...editingValue, value: e.target.value })}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleUpdateValue();
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                                <button onClick={handleUpdateValue} className={styles.btnSave} title="Save changes">✓</button>
+                                <button onClick={() => setEditingValue(null)} className={styles.btnCancel} title="Cancel">✕</button>
+                              </>
+                            ) : (
+                              <>
+                                <span className={styles.valueName}>{val.value}</span>
+                                <div className={styles.valueActions}>
+                                  <button onClick={() => setEditingValue(val)} className={styles.btnEditSmall} title="Edit">✏️</button>
+                                  <button onClick={() => handleDeleteValue(val.id)} className={styles.btnDeleteSmall} title="Delete">🗑️</button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {attr.attribute_values?.length === 0 && (
+                    <div className={styles.noValuesMessage}>
+                      <p>No options yet. Add your first option above.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ))
           )}
