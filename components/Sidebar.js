@@ -49,18 +49,6 @@ export default function Sidebar() {
         >
           <span>🏷️ Attributes</span>
         </Link>
-        <Link
-          href={buildUrl('/admin/recommendations')}
-          className={`${styles.navLink} ${isActive('/admin/recommendations') ? styles.active : ''}`}
-        >
-          <span>🔗 Recommendations</span>
-        </Link>
-        <Link
-          href={buildUrl('/admin/sync-variants')}
-          className={`${styles.navLink} ${isActive('/admin/sync-variants') ? styles.active : ''}`}
-        >
-          <span>🔄 Sync Variants</span>
-        </Link>
       </nav>
     </div>
   );
