@@ -29,10 +29,24 @@
   let recommendationVariantsCache = {};
   let productDataCache = {};
   let recommendationUserSelections = {}; // Store user's manual selections for recommendations
+  let ringSize = ''; // Ring size selection (separate from variants)
+  let isRingProduct = false; // Track if this is a ring product
+  let availableRingSizes = []; // Custom ring sizes for this product
 
   // Fetch product customizer data
   async function loadCustomizer() {
     try {
+      // Fetch product data to check if it's a ring product
+      const productsRes = await fetch(`${APP_URL}/api/products`);
+      const productsData = await productsRes.json();
+      const productData = productsData.find(p => p.id === productId);
+      isRingProduct = productData?.is_ring || false;
+
+      // Get custom ring sizes or use defaults
+      if (isRingProduct) {
+        availableRingSizes = productData?.ring_sizes || [4, 4.25, 4.5, 4.75, 5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75, 8, 8.25, 8.5, 8.75, 9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.25, 11.5, 11.75, 12];
+      }
+
       // Fetch variants from your API
       const variantsRes = await fetch(`${APP_URL}/api/products/${encodeURIComponent(productId)}/variants`);
       const variantsData = await variantsRes.json();
@@ -185,6 +199,18 @@
           `).join('')}
         </div>
 
+        ${isRingProduct ? `
+          <div class="unlimited-option" style="margin-top: 1rem;">
+            <label class="unlimited-option__label">Ring Size</label>
+            <select class="unlimited-ring-size__select" id="ring-size-select">
+              <option value="">Select Ring Size</option>
+              ${availableRingSizes.map(size =>
+                `<option value="${size}">${size}</option>`
+              ).join('')}
+            </select>
+          </div>
+        ` : ''}
+
         <div class="unlimited-customizer__variant-info" style="display: none;">
           <div class="unlimited-variant-price"></div>
           <div class="unlimited-variant-sku" style="display: none;"></div>
@@ -245,6 +271,14 @@
   }
 
   function attachEventListeners() {
+    // Ring size change handler
+    const ringSizeSelect = container.querySelector('#ring-size-select');
+    if (ringSizeSelect) {
+      ringSizeSelect.addEventListener('change', function() {
+        ringSize = this.value;
+      });
+    }
+
     // Dropdown change handlers
     const selects = container.querySelectorAll('.unlimited-option__select');
     selects.forEach(select => {
@@ -766,7 +800,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           variantId: selectedVariant.id,
-          quantity: 1
+          quantity: 1,
+          ringSize: ringSize || null
         })
       });
 
@@ -787,6 +822,11 @@
           '_Price': `$${apiData.variant.price}`
         };
 
+        // Add Ring Size if selected
+        if (ringSize) {
+          properties['Ring Size'] = ringSize;
+        }
+
         itemsToAdd.push({
           id: productVariantId,
           quantity: 1,
@@ -794,10 +834,19 @@
         });
       } else if (apiData.success && apiData.shopifyVariantId) {
         // Direct Shopify variant (if synced)
-        itemsToAdd.push({
+        const itemToAdd = {
           id: apiData.shopifyVariantId,
           quantity: 1
-        });
+        };
+
+        // Add Ring Size if selected
+        if (ringSize) {
+          itemToAdd.properties = {
+            'Ring Size': ringSize
+          };
+        }
+
+        itemsToAdd.push(itemToAdd);
       } else {
         throw new Error('Invalid API response format');
       }
@@ -1014,7 +1063,8 @@
       // Add main product
       itemsToProcess.push({
         variantId: selectedVariant.id,
-        quantity: 1
+        quantity: 1,
+        ringSize: ringSize || null
       });
 
       // Handle recommendations with smart pre-fill if any selected
@@ -1289,7 +1339,8 @@
   color: #333;
 }
 
-.unlimited-option__select {
+.unlimited-option__select,
+.unlimited-ring-size__select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #d1d1d1;
@@ -1300,11 +1351,13 @@
   transition: border-color 0.2s;
 }
 
-.unlimited-option__select:hover {
+.unlimited-option__select:hover,
+.unlimited-ring-size__select:hover {
   border-color: #008060;
 }
 
-.unlimited-option__select:focus {
+.unlimited-option__select:focus,
+.unlimited-ring-size__select:focus {
   outline: none;
   border-color: #008060;
   box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.1);
