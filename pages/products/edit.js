@@ -70,6 +70,20 @@ export default function ProductEdit() {
     };
   }, [hasUnsavedChanges]);
 
+  // Set initial state after loading completes
+  useEffect(() => {
+    if (!loading && !initialState && product) {
+      setInitialState({
+        variants: JSON.stringify(variants),
+        selectedAttributes: JSON.stringify(selectedAttributes),
+        selectedValues: JSON.stringify(selectedValues),
+        selectedRecommendations: JSON.stringify(selectedRecommendations),
+        isRing: isRing,
+        ringSizes: JSON.stringify(ringSizes)
+      });
+    }
+  }, [loading, product]);
+
   // Detect changes in variants, selectedAttributes, selectedValues, or recommendations
   useEffect(() => {
     if (!initialState) return;
@@ -235,18 +249,6 @@ export default function ProductEdit() {
       }
 
       setLoading(false);
-
-      // Set initial state snapshot after data is loaded
-      setTimeout(() => {
-        setInitialState({
-          variants: JSON.stringify(variantsData || []),
-          selectedAttributes: JSON.stringify(selectedAttributes),
-          selectedValues: JSON.stringify(selectedValues),
-          selectedRecommendations: JSON.stringify(selectedRecommendations),
-          isRing: isRing,
-          ringSizes: JSON.stringify(ringSizes)
-        });
-      }, 100);
     } catch (error) {
       console.error('Error fetching data:', error);
       setLoading(false);
