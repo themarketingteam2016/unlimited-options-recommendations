@@ -261,20 +261,7 @@ const recCheckboxes = container.querySelectorAll('.unlimited-recommendation-chec
 recCheckboxes.forEach(checkbox => {
 checkbox.addEventListener('change', function() {
 const productId = this.dataset.productId;
-const productName = this.dataset.productName;
 if (this.checked) {
-const allOptionsSelected = attributes.every(attr => {
-return selectedOptions[attr.id] !== undefined && selectedOptions[attr.id] !== null;
-});
-if (!allOptionsSelected) {
-this.checked = false;
-const missingOptions = attributes
-.filter(attr => !selectedOptions[attr.id])
-.map(attr => attr.name)
-.join(', ');
-alert(`⚠️ Please select all options for the main product first.\n\nMissing: ${missingOptions}\n\nThen you can add "${productName}" to your bundle.`);
-return;
-}
 selectedRecommendations.add(productId);
 } else {
 selectedRecommendations.delete(productId);
@@ -572,6 +559,22 @@ if (addToCartBtn) {
 addToCartBtn.disabled = true;
 addToCartBtn.textContent = 'Select All Options';
 }
+}
+updateRecommendationCheckboxState();
+}
+function updateRecommendationCheckboxState() {
+const allSelected = attributes.every(attr => selectedOptions[attr.id]);
+const recCheckboxes = container.querySelectorAll('.unlimited-recommendation-checkbox');
+recCheckboxes.forEach(checkbox => {
+checkbox.disabled = !allSelected;
+if (!allSelected) {
+checkbox.checked = false;
+selectedRecommendations.delete(checkbox.dataset.productId);
+}
+});
+const bundlePreview = container.querySelector('.unlimited-bundle-preview');
+if (bundlePreview && !allSelected) {
+bundlePreview.style.display = 'none';
 }
 }
 function getMainProductSelections() {
@@ -1184,6 +1187,14 @@ height: 20px;
 cursor: pointer;
 z-index: 10;
 accent-color: #008060;
+}
+.unlimited-recommendation-checkbox:disabled {
+cursor: not-allowed;
+opacity: 0.5;
+}
+.unlimited-recommendation-item:has(.unlimited-recommendation-checkbox:disabled) {
+opacity: 0.6;
+pointer-events: none;
 }
 .unlimited-recommendation-label {
 display: block;
