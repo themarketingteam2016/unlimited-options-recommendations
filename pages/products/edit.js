@@ -526,19 +526,28 @@ export default function ProductEdit() {
   };
 
   const handleVariantUpdate = async (variantId, field, value) => {
+    // Update the local state immediately for better UX
+    setVariants(prevVariants =>
+      prevVariants.map(v =>
+        v.id === variantId ? { ...v, [field]: value } : v
+      )
+    );
+
     const updatedVariant = variants.find(v => v.id === variantId);
     if (!updatedVariant) return;
 
-    updatedVariant[field] = value;
+    const variantToUpdate = { ...updatedVariant, [field]: value };
 
     try {
       await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants: [updatedVariant] })
+        body: JSON.stringify({ variants: [variantToUpdate] })
       });
     } catch (error) {
       console.error('Failed to update variant:', error);
+      // Revert the change if the API call fails
+      await fetchVariants();
     }
   };
 
@@ -1176,7 +1185,6 @@ export default function ProductEdit() {
                       onChange={e => setSelectedVariants(e.target.checked ? variants.map(v => v.id) : [])}
                     />
                   </th>
-                  <th style={{ width: '100px' }}>Image</th>
                   <th>Options</th>
                   <th style={{ width: '100px' }}>Price</th>
                   <th style={{ width: '120px' }}>SKU</th>
@@ -1196,40 +1204,6 @@ export default function ProductEdit() {
                           );
                         }}
                       />
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-                        {(variantImages[variant.id] || variant.image_url) ? (
-                          <img
-                            src={variantImages[variant.id] || variant.image_url}
-                            alt="Variant"
-                            style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e3e5e7' }}
-                          />
-                        ) : (
-                          <div style={{
-                            width: '60px',
-                            height: '60px',
-                            border: '2px dashed #c9cccf',
-                            borderRadius: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '24px',
-                            color: '#c9cccf'
-                          }}>
-                            📷
-                          </div>
-                        )}
-                        <label className={styles.uploadButton}>
-                          {(variantImages[variant.id] || variant.image_url) ? 'Change' : 'Upload'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleVariantImageUpload(variant.id, e)}
-                            style={{ display: 'none' }}
-                          />
-                        </label>
-                      </div>
                     </td>
                     <td>
                       {variant.variant_options?.map((opt, idx) => {
