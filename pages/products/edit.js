@@ -525,27 +525,36 @@ export default function ProductEdit() {
     }
   };
 
-  const handleVariantUpdate = async (variantId, field, value) => {
+  const handleVariantFieldChange = (variantId, field, value) => {
     // Update the local state immediately for better UX
     setVariants(prevVariants =>
       prevVariants.map(v =>
         v.id === variantId ? { ...v, [field]: value } : v
       )
     );
+  };
 
+  const handleVariantSave = async (variantId, field) => {
     const updatedVariant = variants.find(v => v.id === variantId);
     if (!updatedVariant) return;
 
-    const variantToUpdate = { ...updatedVariant, [field]: value };
-
     try {
-      await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+      const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants: [variantToUpdate] })
+        body: JSON.stringify({ variants: [updatedVariant] })
       });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: `${field === 'price' ? 'Price' : 'SKU'} saved successfully!` });
+        setTimeout(() => setMessage(null), 2000);
+      } else {
+        throw new Error('Failed to save');
+      }
     } catch (error) {
       console.error('Failed to update variant:', error);
+      setMessage({ type: 'error', text: 'Failed to save changes' });
+      setTimeout(() => setMessage(null), 3000);
       // Revert the change if the API call fails
       await fetchVariants();
     }
@@ -1269,7 +1278,19 @@ export default function ProductEdit() {
                         type="number"
                         step="0.01"
                         value={variant.price || ''}
-                        onChange={e => handleVariantUpdate(variant.id, 'price', parseFloat(e.target.value))}
+                        onChange={e => handleVariantFieldChange(variant.id, 'price', e.target.value)}
+                        onBlur={e => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            handleVariantSave(variant.id, 'price');
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
+                        placeholder="0.00"
                         style={{ width: '90px' }}
                       />
                     </td>
@@ -1277,7 +1298,14 @@ export default function ProductEdit() {
                       <input
                         type="text"
                         value={variant.sku || ''}
-                        onChange={e => handleVariantUpdate(variant.id, 'sku', e.target.value)}
+                        onChange={e => handleVariantFieldChange(variant.id, 'sku', e.target.value)}
+                        onBlur={() => handleVariantSave(variant.id, 'sku')}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
+                        placeholder="SKU"
                         style={{ width: '110px' }}
                       />
                     </td>
