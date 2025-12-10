@@ -1203,6 +1203,22 @@ export default function ProductEdit() {
               )}
             </div>
 
+            {/* Save Button for Variants - Top */}
+            {variants.length > 0 && modifiedVariants.size > 0 && (
+              <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
+                <button
+                  className={styles.btnPrimary}
+                  onClick={handleSaveVariants}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : `Save Changes (${modifiedVariants.size} modified)`}
+                </button>
+                <span style={{ fontSize: '13px', color: '#202223', fontWeight: '500' }}>
+                  {modifiedVariants.size} variant{modifiedVariants.size !== 1 ? 's' : ''} modified
+                </span>
+              </div>
+            )}
+
             {variants.length > 0 && (
               <table className={styles.variantsTable}>
               <thead>
@@ -1327,9 +1343,9 @@ export default function ProductEdit() {
             </table>
             )}
 
-            {/* Save Button for Variants */}
+            {/* Save Button for Variants - Bottom */}
             {variants.length > 0 && modifiedVariants.size > 0 && (
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
                 <button
                   className={styles.btnPrimary}
                   onClick={handleSaveVariants}
@@ -1337,7 +1353,7 @@ export default function ProductEdit() {
                 >
                   {isSaving ? 'Saving...' : `Save Changes (${modifiedVariants.size} modified)`}
                 </button>
-                <span style={{ fontSize: '13px', color: '#6d7175' }}>
+                <span style={{ fontSize: '13px', color: '#202223', fontWeight: '500' }}>
                   {modifiedVariants.size} variant{modifiedVariants.size !== 1 ? 's' : ''} modified
                 </span>
               </div>
