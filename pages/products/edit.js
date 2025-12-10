@@ -37,6 +37,7 @@ export default function ProductEdit() {
   const [activeTab, setActiveTab] = useState('attributes');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialState, setInitialState] = useState(null);
+  const [modifiedVariants, setModifiedVariants] = useState(new Set());
 
   useEffect(() => {
     if (productId) {
@@ -262,6 +263,7 @@ export default function ProductEdit() {
       console.log('Fetched variants:', data);
       const variantsArray = Array.isArray(data) ? data : [];
       setVariants(variantsArray);
+      setModifiedVariants(new Set()); // Clear modified variants when fetching fresh data
       return variantsArray;
     } catch (error) {
       console.error('Error fetching variants:', error);
@@ -512,6 +514,7 @@ export default function ProductEdit() {
 
         if (res.ok) {
           setMessage({ type: 'success', text: 'Variants updated successfully!' });
+          setModifiedVariants(new Set()); // Clear modified variants after bulk update
           await fetchVariants();
           resetUnsavedChanges();
         }
@@ -532,31 +535,48 @@ export default function ProductEdit() {
         v.id === variantId ? { ...v, [field]: value } : v
       )
     );
+
+    // Track that this variant has been modified
+    setModifiedVariants(prev => new Set([...prev, variantId]));
   };
 
-  const handleVariantSave = async (variantId, field) => {
-    const updatedVariant = variants.find(v => v.id === variantId);
-    if (!updatedVariant) return;
+  const handleSaveVariants = async () => {
+    if (modifiedVariants.size === 0) {
+      setMessage({ type: 'error', text: 'No changes to save' });
+      setTimeout(() => setMessage(null), 2000);
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
+      // Get all modified variants
+      const variantsToUpdate = variants.filter(v => modifiedVariants.has(v.id));
+
       const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants: [updatedVariant] })
+        body: JSON.stringify({ variants: variantsToUpdate })
       });
 
       if (res.ok) {
-        setMessage({ type: 'success', text: `${field === 'price' ? 'Price' : 'SKU'} saved successfully!` });
-        setTimeout(() => setMessage(null), 2000);
+        setMessage({ type: 'success', text: `${modifiedVariants.size} variant(s) saved successfully!` });
+        setTimeout(() => setMessage(null), 3000);
+
+        // Clear modified variants tracking
+        setModifiedVariants(new Set());
+
+        // Reset unsaved changes
+        resetUnsavedChanges();
       } else {
         throw new Error('Failed to save');
       }
     } catch (error) {
-      console.error('Failed to update variant:', error);
+      console.error('Failed to update variants:', error);
       setMessage({ type: 'error', text: 'Failed to save changes' });
       setTimeout(() => setMessage(null), 3000);
-      // Revert the change if the API call fails
-      await fetchVariants();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1279,17 +1299,6 @@ export default function ProductEdit() {
                         step="0.01"
                         value={variant.price || ''}
                         onChange={e => handleVariantFieldChange(variant.id, 'price', e.target.value)}
-                        onBlur={e => {
-                          const value = parseFloat(e.target.value);
-                          if (!isNaN(value)) {
-                            handleVariantSave(variant.id, 'price');
-                          }
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          }
-                        }}
                         placeholder="0.00"
                         style={{ width: '90px' }}
                       />
@@ -1299,12 +1308,6 @@ export default function ProductEdit() {
                         type="text"
                         value={variant.sku || ''}
                         onChange={e => handleVariantFieldChange(variant.id, 'sku', e.target.value)}
-                        onBlur={() => handleVariantSave(variant.id, 'sku')}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          }
-                        }}
                         placeholder="SKU"
                         style={{ width: '110px' }}
                       />
@@ -1322,6 +1325,22 @@ export default function ProductEdit() {
                 ))}
               </tbody>
             </table>
+            )}
+
+            {/* Save Button for Variants */}
+            {variants.length > 0 && modifiedVariants.size > 0 && (
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  className={styles.btnPrimary}
+                  onClick={handleSaveVariants}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : `Save Changes (${modifiedVariants.size} modified)`}
+                </button>
+                <span style={{ fontSize: '13px', color: '#6d7175' }}>
+                  {modifiedVariants.size} variant{modifiedVariants.size !== 1 ? 's' : ''} modified
+                </span>
+              </div>
             )}
 
             {/* Manual Variant Creation - Inside Variants Section */}
