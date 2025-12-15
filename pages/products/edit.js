@@ -34,6 +34,7 @@ export default function ProductEdit() {
   const [attributeValueImages, setAttributeValueImages] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0, message: '' });
   const [activeTab, setActiveTab] = useState('attributes');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialState, setInitialState] = useState(null);
@@ -497,6 +498,9 @@ export default function ProductEdit() {
           setMessage({ type: 'success', text: 'Variants deleted successfully!' });
           setSelectedVariants([]);
           await fetchVariants();
+        } else {
+          const data = await res.json();
+          setMessage({ type: 'error', text: data.error || 'Failed to delete variants' });
         }
       } else if (bulkAction === 'price') {
         const updatedVariants = variants
@@ -506,25 +510,81 @@ export default function ProductEdit() {
             price: parseFloat(bulkValue)
           }));
 
-        const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ variants: updatedVariants })
-        });
+        const totalVariants = updatedVariants.length;
+        console.log(`[Bulk Price] Updating ${totalVariants} variants...`);
 
-        if (res.ok) {
-          setMessage({ type: 'success', text: 'Variants updated successfully!' });
-          setModifiedVariants(new Set()); // Clear modified variants after bulk update
-          await fetchVariants();
-          resetUnsavedChanges();
+        // Chunk large updates
+        const CHUNK_SIZE = 50;
+        const chunks = [];
+        for (let i = 0; i < updatedVariants.length; i += CHUNK_SIZE) {
+          chunks.push(updatedVariants.slice(i, i + CHUNK_SIZE));
         }
+
+        let totalSuccess = 0;
+        let totalFailed = 0;
+
+        setIsSaving(true);
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+
+          setSaveProgress({
+            current: i * CHUNK_SIZE,
+            total: totalVariants,
+            message: `Updating batch ${i + 1} of ${chunks.length}...`
+          });
+
+          try {
+            const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ variants: chunk })
+            });
+
+            const data = await res.json();
+            console.log(`[Bulk Price] Chunk ${i + 1} response:`, data);
+
+            if (res.ok || res.status === 207) {
+              totalSuccess += data.updated || 0;
+              if (data.partial) {
+                totalFailed += data.failed || 0;
+              }
+            } else {
+              totalFailed += chunk.length;
+            }
+          } catch (chunkError) {
+            console.error(`[Bulk Price] Chunk ${i + 1} error:`, chunkError);
+            totalFailed += chunk.length;
+          }
+        }
+
+        setSaveProgress({ current: totalVariants, total: totalVariants, message: 'Complete!' });
+        setIsSaving(false);
+        setSaveProgress({ current: 0, total: 0, message: '' });
+
+        if (totalFailed > 0 && totalSuccess === 0) {
+          setMessage({ type: 'error', text: `Failed to update all ${totalVariants} variants` });
+        } else if (totalFailed > 0) {
+          setMessage({
+            type: 'warning',
+            text: `Updated ${totalSuccess} variant(s). ${totalFailed} failed to update.`
+          });
+        } else {
+          setMessage({ type: 'success', text: `${totalSuccess} variants updated successfully!` });
+        }
+
+        setModifiedVariants(new Set());
+        await fetchVariants();
+        resetUnsavedChanges();
       }
 
       setBulkAction('');
       setBulkValue('');
-      setTimeout(() => setMessage(null), 3000);
+      setTimeout(() => setMessage(null), 4000);
     } catch (error) {
-      setMessage({ type: 'error', text: 'Bulk action failed' });
+      console.error('Bulk action failed:', error);
+      setMessage({ type: 'error', text: `Bulk action failed: ${error.message}` });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
@@ -552,31 +612,115 @@ export default function ProductEdit() {
     try {
       // Get all modified variants
       const variantsToUpdate = variants.filter(v => modifiedVariants.has(v.id));
+      const totalVariants = variantsToUpdate.length;
 
-      const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants: variantsToUpdate })
-      });
+      console.log(`[Save] Saving ${totalVariants} variants...`);
 
-      if (res.ok) {
-        setMessage({ type: 'success', text: `${modifiedVariants.size} variant(s) saved successfully!` });
-        setTimeout(() => setMessage(null), 3000);
+      // For large saves (50+), chunk the requests to avoid timeouts
+      const CHUNK_SIZE = 50;
+      const chunks = [];
+      for (let i = 0; i < variantsToUpdate.length; i += CHUNK_SIZE) {
+        chunks.push(variantsToUpdate.slice(i, i + CHUNK_SIZE));
+      }
+
+      let totalSuccess = 0;
+      let totalFailed = 0;
+      const allErrors = [];
+
+      // Process chunks sequentially to avoid overwhelming the server
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkNum = i + 1;
+
+        // Update progress
+        setSaveProgress({
+          current: i * CHUNK_SIZE,
+          total: totalVariants,
+          message: `Saving batch ${chunkNum} of ${chunks.length}...`
+        });
+
+        console.log(`[Save] Processing chunk ${chunkNum}/${chunks.length} (${chunk.length} variants)`);
+
+        try {
+          const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variants: chunk })
+          });
+
+          const data = await res.json();
+          console.log(`[Save] Chunk ${chunkNum} response:`, data);
+
+          if (res.ok || res.status === 207) {
+            totalSuccess += data.updated || 0;
+            if (data.partial && data.errors) {
+              totalFailed += data.failed || 0;
+              allErrors.push(...data.errors);
+            }
+          } else {
+            // Chunk failed completely
+            totalFailed += chunk.length;
+            allErrors.push({ error: data.error || 'Chunk failed' });
+          }
+        } catch (chunkError) {
+          console.error(`[Save] Chunk ${chunkNum} error:`, chunkError);
+          totalFailed += chunk.length;
+          allErrors.push({ error: chunkError.message });
+        }
+      }
+
+      // Update final progress
+      setSaveProgress({ current: totalVariants, total: totalVariants, message: 'Complete!' });
+
+      console.log(`[Save] Complete: ${totalSuccess} success, ${totalFailed} failed`);
+
+      // Show final result
+      if (totalFailed > 0 && totalSuccess === 0) {
+        // All failed
+        setMessage({ type: 'error', text: `Failed to save all ${totalVariants} variants` });
+        setTimeout(() => setMessage(null), 5000);
+      } else if (totalFailed > 0) {
+        // Partial success
+        setMessage({
+          type: 'warning',
+          text: `Saved ${totalSuccess} variant(s). ${totalFailed} failed to save.`
+        });
+        console.warn('[Save] Partial save - errors:', allErrors);
+
+        // Keep failed variants in modified set
+        const failedIds = new Set(allErrors.map(e => e.id).filter(Boolean));
+        setModifiedVariants(prev => {
+          const newSet = new Set();
+          prev.forEach(id => {
+            if (failedIds.has(id)) {
+              newSet.add(id);
+            }
+          });
+          return newSet;
+        });
+        setTimeout(() => setMessage(null), 5000);
+      } else {
+        // Full success
+        setMessage({ type: 'success', text: `${totalSuccess} variant(s) saved successfully!` });
 
         // Clear modified variants tracking
         setModifiedVariants(new Set());
 
         // Reset unsaved changes
         resetUnsavedChanges();
-      } else {
-        throw new Error('Failed to save');
+        setTimeout(() => setMessage(null), 4000);
       }
+
+      // Refresh variants to get updated data
+      await fetchVariants();
+
     } catch (error) {
       console.error('Failed to update variants:', error);
-      setMessage({ type: 'error', text: 'Failed to save changes' });
-      setTimeout(() => setMessage(null), 3000);
+      setMessage({ type: 'error', text: `Failed to save changes: ${error.message}` });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setIsSaving(false);
+      setSaveProgress({ current: 0, total: 0, message: '' });
     }
   };
 
@@ -812,9 +956,13 @@ export default function ProductEdit() {
       <Sidebar />
 
       {message && (
-        <div className={`${styles.toast} ${message.type === 'success' ? styles.toastSuccess : styles.toastError}`}>
+        <div className={`${styles.toast} ${
+          message.type === 'success' ? styles.toastSuccess :
+          message.type === 'warning' ? styles.toastWarning :
+          styles.toastError
+        }`}>
           <div className={styles.toastIcon}>
-            {message.type === 'success' ? '✓' : '✕'}
+            {message.type === 'success' ? '✓' : message.type === 'warning' ? '!' : '✕'}
           </div>
           <div className={styles.toastText}>{message.text}</div>
         </div>
@@ -1205,17 +1353,46 @@ export default function ProductEdit() {
 
             {/* Save Button for Variants - Top */}
             {variants.length > 0 && modifiedVariants.size > 0 && (
-              <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
+              <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
                 <button
                   className={styles.btnPrimary}
                   onClick={handleSaveVariants}
                   disabled={isSaving}
+                  style={{ minWidth: '180px' }}
                 >
-                  {isSaving ? 'Saving...' : `Save Changes (${modifiedVariants.size} modified)`}
+                  {isSaving
+                    ? (saveProgress.total > 0
+                        ? `Saving... ${Math.round((saveProgress.current / saveProgress.total) * 100)}%`
+                        : 'Saving...')
+                    : `Save Changes (${modifiedVariants.size} modified)`}
                 </button>
                 <span style={{ fontSize: '13px', color: '#202223', fontWeight: '500' }}>
-                  {modifiedVariants.size} variant{modifiedVariants.size !== 1 ? 's' : ''} modified
+                  {isSaving && saveProgress.message
+                    ? saveProgress.message
+                    : `${modifiedVariants.size} variant${modifiedVariants.size !== 1 ? 's' : ''} modified`}
                 </span>
+                {isSaving && saveProgress.total > 0 && (
+                  <div style={{ width: '100%', marginTop: '10px' }}>
+                    <div style={{
+                      width: '100%',
+                      height: '6px',
+                      background: '#e3e5e7',
+                      borderRadius: '3px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${Math.round((saveProgress.current / saveProgress.total) * 100)}%`,
+                        height: '100%',
+                        background: '#008060',
+                        borderRadius: '3px',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#6d7175', marginTop: '4px', display: 'block' }}>
+                      {saveProgress.current} of {saveProgress.total} variants processed
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1345,17 +1522,46 @@ export default function ProductEdit() {
 
             {/* Save Button for Variants - Bottom */}
             {variants.length > 0 && modifiedVariants.size > 0 && (
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', padding: '15px', background: '#f6faf9', border: '1px solid #008060', borderRadius: '8px' }}>
                 <button
                   className={styles.btnPrimary}
                   onClick={handleSaveVariants}
                   disabled={isSaving}
+                  style={{ minWidth: '180px' }}
                 >
-                  {isSaving ? 'Saving...' : `Save Changes (${modifiedVariants.size} modified)`}
+                  {isSaving
+                    ? (saveProgress.total > 0
+                        ? `Saving... ${Math.round((saveProgress.current / saveProgress.total) * 100)}%`
+                        : 'Saving...')
+                    : `Save Changes (${modifiedVariants.size} modified)`}
                 </button>
                 <span style={{ fontSize: '13px', color: '#202223', fontWeight: '500' }}>
-                  {modifiedVariants.size} variant{modifiedVariants.size !== 1 ? 's' : ''} modified
+                  {isSaving && saveProgress.message
+                    ? saveProgress.message
+                    : `${modifiedVariants.size} variant${modifiedVariants.size !== 1 ? 's' : ''} modified`}
                 </span>
+                {isSaving && saveProgress.total > 0 && (
+                  <div style={{ width: '100%', marginTop: '10px' }}>
+                    <div style={{
+                      width: '100%',
+                      height: '6px',
+                      background: '#e3e5e7',
+                      borderRadius: '3px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${Math.round((saveProgress.current / saveProgress.total) * 100)}%`,
+                        height: '100%',
+                        background: '#008060',
+                        borderRadius: '3px',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#6d7175', marginTop: '4px', display: 'block' }}>
+                      {saveProgress.current} of {saveProgress.total} variants processed
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

@@ -397,6 +397,11 @@
   color: white;
 }
 
+.toastWarning {
+  background: #ff9800;
+  color: white;
+}
+
 .toastIcon {
   width: 24px;
   height: 24px;
