@@ -631,13 +631,23 @@ export default function ProductEdit() {
     }
 
     setIsSaving(true);
+    setActionInProgress('Saving changes...');
 
     try {
-      // Get all modified variants
-      const variantsToUpdate = variants.filter(v => modifiedVariants.has(v.id));
+      // Get all modified variants - only send essential fields to reduce payload
+      const variantsToUpdate = variants
+        .filter(v => modifiedVariants.has(v.id))
+        .map(v => ({
+          id: v.id,
+          price: v.price,
+          sku: v.sku,
+          stock_quantity: v.stock_quantity,
+          is_active: v.is_active
+        }));
       const totalVariants = variantsToUpdate.length;
 
       console.log(`[Save] Saving ${totalVariants} variants...`);
+      setActionInProgress(`Saving ${totalVariants} variants...`);
 
       // For large saves (50+), chunk the requests to avoid timeouts
       const CHUNK_SIZE = 50;
@@ -656,10 +666,12 @@ export default function ProductEdit() {
         const chunkNum = i + 1;
 
         // Update progress
+        const progressMsg = `Saving batch ${chunkNum} of ${chunks.length}...`;
+        setActionInProgress(progressMsg);
         setSaveProgress({
           current: i * CHUNK_SIZE,
           total: totalVariants,
-          message: `Saving batch ${chunkNum} of ${chunks.length}...`
+          message: progressMsg
         });
 
         console.log(`[Save] Processing chunk ${chunkNum}/${chunks.length} (${chunk.length} variants)`);
@@ -743,6 +755,7 @@ export default function ProductEdit() {
       setTimeout(() => setMessage(null), 5000);
     } finally {
       setIsSaving(false);
+      setActionInProgress('');
       setSaveProgress({ current: 0, total: 0, message: '' });
     }
   };
