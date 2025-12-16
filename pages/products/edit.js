@@ -810,12 +810,28 @@ export default function ProductEdit() {
       });
 
       if (res.ok) {
+        // Optimistic update: immediately remove from local state
+        setVariants(prevVariants => prevVariants.filter(v => v.id !== variantId));
+        // Also remove from selected variants if it was selected
+        setSelectedVariants(prev => prev.filter(id => id !== variantId));
+        // Remove from modified variants tracking
+        setModifiedVariants(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(variantId);
+          return newSet;
+        });
+
         setMessage({ type: 'success', text: 'Variant deleted successfully!' });
-        await fetchVariants();
         setTimeout(() => setMessage(null), 3000);
+      } else {
+        const data = await res.json();
+        setMessage({ type: 'error', text: data.error || 'Failed to delete variant' });
+        setTimeout(() => setMessage(null), 5000);
       }
     } catch (error) {
+      console.error('Delete variant error:', error);
       setMessage({ type: 'error', text: 'Failed to delete variant' });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
