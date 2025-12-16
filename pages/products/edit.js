@@ -809,12 +809,13 @@ export default function ProductEdit() {
         body: JSON.stringify({ variantIds: [variantId] })
       });
 
-      if (res.ok) {
-        // Optimistic update: immediately remove from local state
+      const data = await res.json();
+
+      if (res.ok && data.deleted > 0) {
+        // Successfully deleted from database
+        // Update local state to match
         setVariants(prevVariants => prevVariants.filter(v => v.id !== variantId));
-        // Also remove from selected variants if it was selected
         setSelectedVariants(prev => prev.filter(id => id !== variantId));
-        // Remove from modified variants tracking
         setModifiedVariants(prev => {
           const newSet = new Set(prev);
           newSet.delete(variantId);
@@ -823,8 +824,13 @@ export default function ProductEdit() {
 
         setMessage({ type: 'success', text: 'Variant deleted successfully!' });
         setTimeout(() => setMessage(null), 3000);
+      } else if (res.ok && data.deleted === 0) {
+        // API returned success but nothing was deleted
+        setMessage({ type: 'error', text: 'Variant could not be deleted. Please refresh and try again.' });
+        // Refresh to get true state from database
+        await fetchVariants();
+        setTimeout(() => setMessage(null), 5000);
       } else {
-        const data = await res.json();
         setMessage({ type: 'error', text: data.error || 'Failed to delete variant' });
         setTimeout(() => setMessage(null), 5000);
       }

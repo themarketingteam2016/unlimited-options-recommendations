@@ -173,14 +173,38 @@ export default async function handler(req, res) {
     try {
       const { variantIds } = req.body;
 
-      const { error } = await supabaseAdmin
+      if (!variantIds || !Array.isArray(variantIds) || variantIds.length === 0) {
+        return res.status(400).json({ error: 'variantIds array is required' });
+      }
+
+      console.log('[Variants DELETE] Deleting variants:', variantIds);
+
+      // First delete variant_options (child records)
+      const { error: optionsError } = await supabaseAdmin
+        .from('variant_options')
+        .delete()
+        .in('variant_id', variantIds);
+
+      if (optionsError) {
+        console.error('[Variants DELETE] Error deleting variant_options:', optionsError);
+        // Continue anyway - options might not exist
+      }
+
+      // Then delete the variants
+      const { data: deleted, error } = await supabaseAdmin
         .from('variants')
         .delete()
-        .in('id', variantIds);
+        .in('id', variantIds)
+        .select('id');
 
       if (error) throw error;
 
-      res.status(200).json({ success: true });
+      console.log('[Variants DELETE] Deleted variants:', deleted?.length || 0);
+
+      res.status(200).json({
+        success: true,
+        deleted: deleted?.length || 0
+      });
     } catch (error) {
       console.error('Failed to delete variants:', error);
       res.status(500).json({ error: error.message });
