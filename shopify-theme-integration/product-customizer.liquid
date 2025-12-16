@@ -72,7 +72,12 @@ container.innerHTML = '<p>Error loading product options. Please refresh the page
 }
 function updateMainProductImage(imageUrl, altText) {
 try {
+console.log('[Unlimited Options] Attempting to update main product image');
+console.log('[Unlimited Options] Image URL:', imageUrl);
+console.log('[Unlimited Options] Alt Text:', altText);
 const selectors = [
+'.product-media__image',
+'img.product-media__image',
 '.product__media img',
 '.product-single__photo img',
 '.product__image img',
@@ -87,17 +92,27 @@ const selectors = [
 'img[data-image-id]',
 '.main-product-image img',
 '.product-photo-container img',
-'[data-product-image]'
+'[data-product-image]',
+'.ProductItem__Wrapper img',
+'.Product__Slideshow img',
+'.product-single__media img',
+'#ProductPhotoImg',
+'.product__photo-wrapper img'
 ];
 let mainImage = null;
+let matchedSelector = null;
 for (const selector of selectors) {
 const elements = document.querySelectorAll(selector);
 if (elements.length > 0) {
 mainImage = elements[0];
+matchedSelector = selector;
+console.log('[Unlimited Options] Found main image using selector:', selector);
+console.log('[Unlimited Options] Image element:', mainImage);
 break;
 }
 }
 if (mainImage) {
+console.log('[Unlimited Options] Updating image src from:', mainImage.src, 'to:', imageUrl);
 mainImage.src = imageUrl;
 mainImage.alt = altText;
 const pictureParent = mainImage.closest('picture');
@@ -106,13 +121,24 @@ const sources = pictureParent.querySelectorAll('source');
 sources.forEach(source => {
 source.srcset = imageUrl;
 });
+console.log('[Unlimited Options] Updated', sources.length, 'source elements');
 }
 document.dispatchEvent(new CustomEvent('product:image:changed', {
 detail: { imageUrl, altText }
 }));
+console.log('[Unlimited Options] Successfully updated main product image');
+} else {
+console.warn('[Unlimited Options] Could not find main product image element');
+console.log('[Unlimited Options] Available images on page:');
+const allImages = document.querySelectorAll('img');
+allImages.forEach((img, index) => {
+if (index < 10) {
+console.log(`  Image ${index}:`, img.className, img.id, img.src);
+}
+});
 }
 } catch (error) {
-console.error('Error updating main product image:', error);
+console.error('[Unlimited Options] Error updating main product image:', error);
 }
 }
 async function loadRecommendations() {
@@ -301,18 +327,27 @@ selects.forEach(select => {
 select.addEventListener('change', function() {
 const attrId = this.dataset.attributeId;
 const valueId = this.value;
+console.log('[Unlimited Options] Attribute changed - ID:', attrId, 'Value ID:', valueId);
 if (valueId) {
 selectedOptions[attrId] = valueId;
 const attr = attributes.find(a => a.id === attrId);
 const value = attr?.values.find(v => v.id === valueId);
+console.log('[Unlimited Options] Selected attribute:', attr?.name);
+console.log('[Unlimited Options] Selected value:', value);
+console.log('[Unlimited Options] Has image_url:', !!value?.image_url);
 const preview = this.closest('.unlimited-option').querySelector('.unlimited-option__preview');
 const previewImg = preview.querySelector('.unlimited-option__image');
 if (value?.image_url) {
+console.log('[Unlimited Options] Value has image, calling updateMainProductImage');
 previewImg.src = value.image_url;
 previewImg.alt = value.value;
 preview.style.display = 'block';
 updateMainProductImage(value.image_url, value.value);
+document.dispatchEvent(new CustomEvent('unlimited-options:image-change', {
+detail: { imageUrl: value.image_url, altText: value.value }
+}));
 } else {
+console.log('[Unlimited Options] Value has no image_url');
 preview.style.display = 'none';
 }
 } else {

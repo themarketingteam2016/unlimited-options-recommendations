@@ -34,6 +34,8 @@ export default function ProductEdit() {
   const [attributeValueImages, setAttributeValueImages] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState('');
   const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0, message: '' });
   const [activeTab, setActiveTab] = useState('attributes');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -462,10 +464,16 @@ export default function ProductEdit() {
       console.log('Response data:', data);
 
       if (res.ok) {
-        setMessage({ type: 'success', text: `Generated ${data.count} variants successfully!` });
+        const created = data.created || 0;
+        const skipped = data.skipped || 0;
+        let successMsg = `Created ${created} new variant${created !== 1 ? 's' : ''}`;
+        if (skipped > 0) {
+          successMsg += ` (${skipped} already existed)`;
+        }
+        setMessage({ type: 'success', text: successMsg });
         setShowGenerateModal(false);
         await fetchVariants();
-        setTimeout(() => setMessage(null), 3000);
+        setTimeout(() => setMessage(null), 4000);
         resetUnsavedChanges();
       } else {
         setMessage({ type: 'error', text: `Failed: ${data.error || 'Unknown error'}` });
@@ -488,25 +496,36 @@ export default function ProductEdit() {
 
     try {
       if (bulkAction === 'delete') {
+        setIsDeleting(true);
+        setActionInProgress(`Deleting ${selectedVariants.length} variants...`);
+
         const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ variantIds: selectedVariants })
         });
 
-        if (res.ok) {
-          setMessage({ type: 'success', text: 'Variants deleted successfully!' });
+        const data = await res.json();
+
+        if (res.ok && data.deleted > 0) {
+          setMessage({ type: 'success', text: `${data.deleted} variants deleted successfully!` });
+          // Update local state
+          setVariants(prev => prev.filter(v => !selectedVariants.includes(v.id)));
           setSelectedVariants([]);
+        } else if (res.ok && data.deleted === 0) {
+          setMessage({ type: 'error', text: 'No variants were deleted. Please refresh and try again.' });
           await fetchVariants();
         } else {
-          const data = await res.json();
           setMessage({ type: 'error', text: data.error || 'Failed to delete variants' });
         }
+        setIsDeleting(false);
+        setActionInProgress('');
       } else if (bulkAction === 'price') {
+        // Only send essential fields to reduce payload size
         const updatedVariants = variants
           .filter(v => selectedVariants.includes(v.id))
           .map(v => ({
-            ...v,
+            id: v.id,
             price: parseFloat(bulkValue)
           }));
 
@@ -524,14 +543,17 @@ export default function ProductEdit() {
         let totalFailed = 0;
 
         setIsSaving(true);
+        setActionInProgress(`Updating ${totalVariants} variants...`);
 
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
 
+          const progressMsg = `Updating batch ${i + 1} of ${chunks.length}...`;
+          setActionInProgress(progressMsg);
           setSaveProgress({
             current: i * CHUNK_SIZE,
             total: totalVariants,
-            message: `Updating batch ${i + 1} of ${chunks.length}...`
+            message: progressMsg
           });
 
           try {
@@ -560,6 +582,7 @@ export default function ProductEdit() {
 
         setSaveProgress({ current: totalVariants, total: totalVariants, message: 'Complete!' });
         setIsSaving(false);
+        setActionInProgress('');
         setSaveProgress({ current: 0, total: 0, message: '' });
 
         if (totalFailed > 0 && totalSuccess === 0) {
@@ -802,6 +825,9 @@ export default function ProductEdit() {
   const handleDeleteVariant = async (variantId) => {
     if (!confirm('Are you sure you want to delete this variant?')) return;
 
+    setIsDeleting(true);
+    setActionInProgress('Deleting variant...');
+
     try {
       const res = await fetch(`/api/variants?productId=${encodeURIComponent(productId)}`, {
         method: 'DELETE',
@@ -838,6 +864,9 @@ export default function ProductEdit() {
       console.error('Delete variant error:', error);
       setMessage({ type: 'error', text: 'Failed to delete variant' });
       setTimeout(() => setMessage(null), 5000);
+    } finally {
+      setIsDeleting(false);
+      setActionInProgress('');
     }
   };
 
@@ -987,6 +1016,68 @@ export default function ProductEdit() {
             {message.type === 'success' ? '✓' : message.type === 'warning' ? '!' : '✕'}
           </div>
           <div className={styles.toastText}>{message.text}</div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {(isGenerating || isSaving || isDeleting) && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(255, 255, 255, 0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e3e5e7',
+            borderTopColor: '#008060',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <div style={{
+            marginTop: '20px',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#202223'
+          }}>
+            {actionInProgress || (isGenerating ? 'Generating variants...' : isSaving ? 'Saving...' : 'Deleting...')}
+          </div>
+          {saveProgress.total > 0 && (
+            <div style={{ marginTop: '15px', width: '300px' }}>
+              <div style={{
+                width: '100%',
+                height: '8px',
+                background: '#e3e5e7',
+                borderRadius: '4px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${Math.round((saveProgress.current / saveProgress.total) * 100)}%`,
+                  height: '100%',
+                  background: '#008060',
+                  borderRadius: '4px',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '13px', color: '#6d7175' }}>
+                {saveProgress.current} of {saveProgress.total}
+              </div>
+            </div>
+          )}
+          <style jsx>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
       )}
 

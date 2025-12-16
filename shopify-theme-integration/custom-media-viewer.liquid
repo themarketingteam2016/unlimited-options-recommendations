@@ -1,0 +1,209 @@
+{% comment %}
+Custom Media Viewer for Product Images
+Replaces default product media with custom viewer that updates based on attribute selections
+Usage: Include this snippet in your product template
+{% render 'custom-media-viewer', product: product %}
+{% endcomment %}
+
+<div class="custom-media-viewer" data-product-id="{{ product.id }}">
+  <div class="custom-media-viewer__main">
+    {% if product.featured_image %}
+      <img
+        id="custom-main-image-{{ product.id }}"
+        class="custom-media-viewer__image"
+        src="{{ product.featured_image | img_url: '1200x' }}"
+        alt="{{ product.featured_image.alt | escape }}"
+        data-default-src="{{ product.featured_image | img_url: '1200x' }}"
+      >
+    {% else %}
+      <div class="custom-media-viewer__placeholder">
+        <span>No Image Available</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if product.images.size > 1 %}
+  <div class="custom-media-viewer__thumbnails">
+    {% for image in product.images limit: 5 %}
+      <div class="custom-media-viewer__thumbnail {% if forloop.first %}active{% endif %}" data-image-index="{{ forloop.index0 }}">
+        <img
+          src="{{ image | img_url: '150x' }}"
+          alt="{{ image.alt | escape }}"
+          data-full-src="{{ image | img_url: '1200x' }}"
+        >
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  const productId = 'gid://shopify/Product/{{ product.id }}';
+  const viewerContainer = document.querySelector('.custom-media-viewer[data-product-id="{{ product.id }}"]');
+
+  if (!viewerContainer) return;
+
+  const mainImage = viewerContainer.querySelector('#custom-main-image-{{ product.id }}');
+  const thumbnails = viewerContainer.querySelectorAll('.custom-media-viewer__thumbnail');
+  const defaultImageSrc = mainImage ? mainImage.dataset.defaultSrc : null;
+
+  // Handle thumbnail clicks
+  thumbnails.forEach(thumbnail => {
+    thumbnail.addEventListener('click', function() {
+      const fullSrc = this.querySelector('img').dataset.fullSrc;
+      const alt = this.querySelector('img').alt;
+
+      if (mainImage) {
+        mainImage.src = fullSrc;
+        mainImage.alt = alt;
+      }
+
+      // Update active thumbnail
+      thumbnails.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Listen for attribute image changes from product customizer
+  document.addEventListener('unlimited-options:image-change', function(e) {
+    if (e.detail && e.detail.imageUrl && mainImage) {
+      console.log('[Custom Media Viewer] Updating image to:', e.detail.imageUrl);
+      mainImage.src = e.detail.imageUrl;
+      mainImage.alt = e.detail.altText || 'Custom Option Image';
+
+      // Remove active state from thumbnails when showing custom image
+      thumbnails.forEach(t => t.classList.remove('active'));
+    }
+  });
+
+  // Reset to default image
+  window.resetProductImage = function() {
+    if (mainImage && defaultImageSrc) {
+      mainImage.src = defaultImageSrc;
+      mainImage.alt = {{ product.title | json }};
+
+      // Activate first thumbnail
+      if (thumbnails.length > 0) {
+        thumbnails.forEach(t => t.classList.remove('active'));
+        thumbnails[0].classList.add('active');
+      }
+    }
+  };
+
+  // Expose method to update image from external scripts
+  window.updateCustomMediaViewer = function(imageUrl, altText) {
+    if (mainImage) {
+      mainImage.src = imageUrl;
+      mainImage.alt = altText || 'Product Image';
+      thumbnails.forEach(t => t.classList.remove('active'));
+    }
+  };
+})();
+</script>
+
+<style>
+.custom-media-viewer {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 30px;
+}
+
+.custom-media-viewer__main {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #f9f9f9;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.custom-media-viewer__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.3s ease;
+}
+
+.custom-media-viewer__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #999;
+  font-size: 18px;
+}
+
+.custom-media-viewer__thumbnails {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.custom-media-viewer__thumbnail {
+  flex-shrink: 0;
+  width: 80px;
+  height: 80px;
+  border: 2px solid #e5e5e5;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+
+.custom-media-viewer__thumbnail:hover {
+  border-color: #008060;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.custom-media-viewer__thumbnail.active {
+  border-color: #008060;
+  box-shadow: 0 0 0 1px #008060;
+}
+
+.custom-media-viewer__thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Scrollbar styling for thumbnails */
+.custom-media-viewer__thumbnails::-webkit-scrollbar {
+  height: 6px;
+}
+
+.custom-media-viewer__thumbnails::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.custom-media-viewer__thumbnails::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.custom-media-viewer__thumbnails::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+@media (max-width: 768px) {
+  .custom-media-viewer {
+    max-width: 100%;
+  }
+
+  .custom-media-viewer__thumbnail {
+    width: 60px;
+    height: 60px;
+  }
+}
+</style>

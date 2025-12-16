@@ -149,63 +149,100 @@ export default async function handler(req, res) {
     // Generate combinations
     const combinations = generateCombinations(filteredAttributes);
 
+    console.log(`[Generate] Mode: ${mode}, Total combinations: ${combinations.length}`);
+
     if (mode === 'scratch') {
+      // Delete all existing variant_options first (child records)
+      const { data: existingVariants } = await supabaseAdmin
+        .from('variants')
+        .select('id')
+        .eq('product_id', productId);
+
+      if (existingVariants && existingVariants.length > 0) {
+        const variantIds = existingVariants.map(v => v.id);
+        await supabaseAdmin
+          .from('variant_options')
+          .delete()
+          .in('variant_id', variantIds);
+      }
+
       // Delete existing variants
       await supabaseAdmin
         .from('variants')
         .delete()
         .eq('product_id', productId);
+
+      console.log('[Generate] Scratch mode: deleted existing variants');
     }
 
-    // Insert new variants
-    const variants = [];
+    // Get all existing combination keys for this product (for modify mode)
+    let existingKeys = new Set();
+    if (mode === 'modify') {
+      const { data: existingVariants } = await supabaseAdmin
+        .from('variants')
+        .select('combination_key')
+        .eq('product_id', productId);
+
+      if (existingVariants) {
+        existingKeys = new Set(existingVariants.map(v => v.combination_key));
+      }
+      console.log(`[Generate] Modify mode: found ${existingKeys.size} existing variants`);
+    }
+
+    // Insert only new variants
+    const newVariants = [];
+    let skippedCount = 0;
+
     for (const combo of combinations) {
       const combinationKey = combo
         .map(c => `${c.attribute_name}:${c.value}`)
         .sort()
         .join('|');
 
-      // Check if variant exists (for modify mode)
-      const { data: existing } = await supabaseAdmin
+      // Skip if variant already exists (modify mode)
+      if (mode === 'modify' && existingKeys.has(combinationKey)) {
+        skippedCount++;
+        continue;
+      }
+
+      // Create new variant
+      const { data: variant, error: variantError } = await supabaseAdmin
         .from('variants')
-        .select('id')
-        .eq('product_id', productId)
-        .eq('combination_key', combinationKey)
+        .insert({
+          product_id: productId,
+          combination_key: combinationKey,
+          price: 0,
+          stock_quantity: 0,
+          is_active: true
+        })
+        .select()
         .single();
 
-      if (!existing || mode === 'scratch') {
-        const { data: variant, error: variantError } = await supabaseAdmin
-          .from('variants')
-          .upsert({
-            product_id: productId,
-            combination_key: combinationKey,
-            price: 0,
-            stock_quantity: 0,
-            is_active: true
-          }, {
-            onConflict: 'product_id,combination_key'
-          })
-          .select()
-          .single();
+      if (!variantError && variant) {
+        // Insert variant options
+        const optionInserts = combo.map(c => ({
+          variant_id: variant.id,
+          attribute_id: c.attribute_id,
+          attribute_value_id: c.attribute_value_id
+        }));
 
-        if (!variantError && variant) {
-          // Insert variant options
-          const optionInserts = combo.map(c => ({
-            variant_id: variant.id,
-            attribute_id: c.attribute_id,
-            attribute_value_id: c.attribute_value_id
-          }));
+        await supabaseAdmin
+          .from('variant_options')
+          .insert(optionInserts);
 
-          await supabaseAdmin
-            .from('variant_options')
-            .insert(optionInserts);
-
-          variants.push(variant);
-        }
+        newVariants.push(variant);
       }
     }
 
-    res.status(200).json({ success: true, variants, count: combinations.length });
+    console.log(`[Generate] Created ${newVariants.length} new variants, skipped ${skippedCount} existing`);
+
+    res.status(200).json({
+      success: true,
+      variants: newVariants,
+      created: newVariants.length,
+      skipped: skippedCount,
+      total: combinations.length
+    });
   } catch (error) {
     console.error('Failed to generate variants:', error);
     res.status(500).json({ error: error.message });
